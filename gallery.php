@@ -35,8 +35,8 @@
 		// Content type
 		header('Content-Type: image/jpeg');
 		
-		if(is_file($dir.'/'.$_GET['t'].'.thm.tmp') && $save) {
-			readfile($dir.'/'.$_GET['t'].'.thm.tmp');
+		if(is_file($dir.'/zz_thm_'.$_GET['t'].'.tmp') && $save) {
+			readfile($dir.'/zz_thm_'.$_GET['t'].'.tmp');
 		} else {
 			$img = @imagecreatefromstring(file_get_contents($dir.'/'.$_GET['t'])); // load image file
 			$res = imagecreatetruecolor($size,$size);  // create empty canvas for thumbnail
@@ -51,8 +51,8 @@
 			
 			// output generated image
 			if($save) {
-				imagejpeg($res,$dir.'/'.$_GET['t'].'.thm.tmp');
-				readfile($dir.'/'.$_GET['t'].'.thm.tmp');
+				imagejpeg($res,$dir.'/zz_thm_'.$_GET['t'].'.tmp');
+				readfile($dir.'/zz_thm_'.$_GET['t'].'.tmp');
 			} else
 				imagejpeg($res);
 		}
