@@ -9,9 +9,10 @@
 	///////////////////
 	
 	$newtab = false; // open images in a new tab when clicked.
-	$dir = '.';      // the directory to get images from, use '.' for the current directory.
-	$size = 150;     // thumbnail width/height in pixels.  150 is recommended for best display, mobile is always 75px.
+	$dir   = '.';    // the directory to get images from, use '.' for the current directory.
+	$size  = 150;    // thumbnail width/height in pixels.  150 is recommended for best display, mobile is always 75px.
 	$cache = 30*24;  // time to cache images in hours (using cache header, nothing is cached on the server)
+	$save  = true;   // save the generated thumbnails to prevent them from generating again on every page load
 	$types = array(  // file types to attempt to open as images
 		'jpg',
 		'jpeg',
@@ -24,16 +25,6 @@
 	
 	// If request is for a thumbnail, generate it
 	if($_GET['t']) {
-		$img = imagecreatefromstring(file_get_contents($dir.'/'.$_GET['t'])); // load image file
-		$res = imagecreatetruecolor($size,$size);  // create empty canvas for thumbnail
-		$w = imagecolorallocate($res,255,255,255); // allocate white background color
-		imagefill($res,0,0,$w);                    // fill image with white
-		
-		// get smaller of image's dimensions
-		$d = (imagesx($img)>imagesy($img)) ? imagesy($img) : imagesx($img);
-		
-		// crop, resize, and copy from source image
-		imagecopyresampled($res,$img,0,0,(imagesx($img)-$d)/2,(imagesy($img)-$d)/2,$size,$size,$d,$d);
 		
 		// output cache headers
 		$expires = 3600*$cache;
@@ -41,9 +32,30 @@
 		header("Cache-Control: maxage=".$expires);
 		header('Expires: '.gmdate('D, d M Y H:i:s',time()+$expires).' GMT');
 		
-		// output generated image
+		// Content type
 		header('Content-Type: image/jpeg');
-		imagejpeg($res);
+		
+		if(is_file($dir.'/'.$_GET['t'].'.thm.tmp') && $save) {
+			readfile($dir.'/'.$_GET['t'].'.thm.tmp');
+		} else {
+			$img = @imagecreatefromstring(file_get_contents($dir.'/'.$_GET['t'])); // load image file
+			$res = imagecreatetruecolor($size,$size);  // create empty canvas for thumbnail
+			$w = imagecolorallocate($res,255,255,255); // allocate white background color
+			imagefill($res,0,0,$w);                    // fill image with white
+			
+			// get smaller of image's dimensions
+			$d = (imagesx($img)>imagesy($img)) ? imagesy($img) : imagesx($img);
+			
+			// crop, resize, and copy from source image
+			imagecopyresampled($res,$img,0,0,(imagesx($img)-$d)/2,(imagesy($img)-$d)/2,$size,$size,$d,$d);
+			
+			// output generated image
+			if($save) {
+				imagejpeg($res,$dir.'/'.$_GET['t'].'.thm.tmp');
+				readfile($dir.'/'.$_GET['t'].'.thm.tmp');
+			} else
+				imagejpeg($res);
+		}
 		exit();
 	}
 	
@@ -73,7 +85,7 @@
 	div {
 		margin: 0;
 		padding: 0;
-		max-width: 900px;
+		max-width: 936px;
 		margin: 0 auto;
 	}
 	a {
