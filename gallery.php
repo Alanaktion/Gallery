@@ -1,6 +1,6 @@
 <?php
 	/*
-	*	Gallery 0.1 by Alan Hardman
+	*	Gallery 0.2 by Alan Hardman
 	*	A tiny drop-in photo gallery with desktop, mobile, and high-resolution support
 	*/
 
