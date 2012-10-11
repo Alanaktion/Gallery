@@ -1,6 +1,6 @@
 <?php
 	/*
-	*	Gallery 0.2 by Alan Hardman
+	*	Gallery 0.3 by Alan Hardman
 	*	A tiny drop-in photo gallery with desktop, mobile, and high-resolution support
 	*/
 
@@ -13,6 +13,7 @@
 	$size  = 150;    // thumbnail width/height in pixels.  150 is recommended for best display, mobile is always 75px.
 	$cache = 30*24;  // time to cache images in hours (using cache header, nothing is cached on the server)
 	$save  = true;   // save the generated thumbnails to prevent them from generating again on every page load
+	$sort  = true;   // sort files by name (otherwise they are ordered by the filesystem)
 	$types = array(  // file types to attempt to open as images
 		'jpg',
 		'jpeg',
@@ -69,6 +70,9 @@
 				$imgs[] = $f;      // add image to list
 		}
 	closedir($h);
+	
+	if($sort)
+		sort($imgs);
 
 ?>
 <!doctype html>
