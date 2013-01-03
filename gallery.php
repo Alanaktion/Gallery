@@ -1,20 +1,23 @@
 <?php
 	/*
-	*	Gallery 0.4 by Alan Hardman
+	*	Gallery 0.5 by Alan Hardman
 	*	A tiny drop-in photo gallery with desktop and mobile support
+	*   (this thing works great on iPhone)
 	*/
 
 	///////////////////
 	// Configuration //
 	///////////////////
 	
+	// Page title
+	$title = 'Gallery';
+	
 	$newtab = false; // open images in a new tab when clicked.
 	$dir   = '.';    // the directory to get images from, use '.' for the current directory.
-	$size  = 150;    // thumbnail width/height in pixels.  150 is recommended for best display, mobile is always 75px.
-	$cache = 30*24;  // time to cache images in hours (using cache header, nothing is cached on the server)
+	$size  = 150;    // thumbnail width/height in pixels.  150 is recommended for best display, mobile resizes to 75px on client-side.
+	$cache = 30*24;  // client-side thumbnail cache time in hours
 	$save  = true;   // save the generated thumbnails to prevent them from generating again on every page load
-	$cmpct = false;  // keep thumbnails compacted into a single file (may be slow with large numbers of photos)
-	                    // this feature is not yet working as expected!
+	$hide  = true;   // hide thumbnail directory (.thm/ instead of thm/, also sets the Hidden attribute on Windows)
 	$sort  = true;   // sort files by name (otherwise they are ordered by the filesystem)
 	$types = array(  // file types to attempt to open as images
 		'jpg',
@@ -33,6 +36,9 @@
 	
 	$debug = true;  // Enable debug logging
 	
+	// Initialize a couple things
+	define('IS_WIN',(strncasecmp(PHP_OS,'WIN',3)==0) ? true: false);
+	
 	////////////////
 	// Thumbnails //
 	////////////////
@@ -40,7 +46,7 @@
 	// If request is for a thumbnail, generate it
 	if($_GET['t']) {
 		
-		// output cache headers
+		// Output cache headers
 		$expires = 3600*$cache;
 		header("Pragma: public");
 		header("Cache-Control: maxage=".$expires);
@@ -49,52 +55,33 @@
 		// Content type
 		header('Content-Type: image/jpeg');
 		
-		if($cmpct && $save) {
-			// Compact thumbnail cache enabled
-			
-			// Get existing thumbnails
-			if(is_file($dir.'/gallery.thm')) {
-				$f = file_get_contents($dir.'/gallery.thm') or die('Unable to open cache file');
-				$d = unserialize($f);
-				
-				// If requested thumbnail exists, output it
-				if($d[$_GET['t']]) {
-					if($debug)
-						file_put_contents($dir.'/cacheread.log',$_GET['t']."\n",FILE_APPEND);
-					print gzinflate($d[$_GET['t']]);
-					exit();
-				}
-			} else
-				$d = array();
-			
-			// Generate requested thumbnail
-			mkthumb($_GET['t'],false);
-			
-			// Load generated thumbnail
-			$t = file_get_contents($dir.'/zz_thm_'.$_GET['t'].'.tmp') or die('Unable to load temporary thumbnail');
-			
-			// Add thumbnail to the cache file
-			$d[$_GET['t']] = gzdeflate($t);
-			file_put_contents($dir.'/gallery.thm',serialize($d)) or die('Unable to save cache file');
-			if($debug)
-				file_put_contents($dir.'/generate.log',$_GET['t']."\n",FILE_APPEND);
-			
-			// Delete temp file and output thumbnail
-			unlink($dir.'/zz_thm_'.$_GET['t'].'.tmp');
-			print $t;
-			
-		} elseif(is_file($dir.'/zz_thm_'.$_GET['t'].'.tmp') && $save) {
+		// Generate thumbnail directory
+		if($save) {
+			$sdir = $dir.'/'.(($hide && !IS_WIN) ? '.thm' : 'thm');
+			if(!is_dir($sdir)) {
+				mkdir($sdir);
+				if($hide && IS_WIN)
+					// Hide folder on Windows
+					@shell_exec('attrib +h "'.$sdir.'"');
+			}
+		}
+		
+		// Output thumbnail
+		if($save && is_file($sdir.'/'.$_GET['t'].'.jpg')) {
 			// Individual thumbnail file exists
-			readfile($dir.'/zz_thm_'.$_GET['t'].'.tmp');
+			readfile($sdir.'/'.$_GET['t'].'.jpg');
 		} else {
 			// No thumbnail cache exists, not using compact cache
 			mkthumb($_GET['t']);
 		}
+		
+		// All done
 		exit();
 	}
 	
+	// Make Thumbnail from $src
 	function mkthumb($src,$output = true) {
-		global $save,$size,$dir;
+		global $save,$size,$dir,$sdir;
 		$img = @imagecreatefromstring(file_get_contents($dir.'/'.$src)); // load image file
 		$res = imagecreatetruecolor($size,$size);  // create empty canvas for thumbnail
 		$w = imagecolorallocate($res,255,255,255); // allocate white background color
@@ -108,9 +95,9 @@
 		
 		// output generated image
 		if($save) {
-			imagejpeg($res,$dir.'/zz_thm_'.$_GET['t'].'.tmp');
+			imagejpeg($res,$sdir.'/'.$_GET['t'].'.jpg');
 			if($output)
-				readfile($dir.'/zz_thm_'.$_GET['t'].'.tmp');
+				readfile($sdir.'/'.$_GET['t'].'.jpg');
 		} else
 			imagejpeg($res);
 	}
@@ -156,7 +143,7 @@
 <!doctype html>
 <html>
 <head>
-	<title>Gallery</title>
+	<title><?php echo $title; ?></title>
 	<meta name="viewport" content="width=device-width,maximum-scale=1">
 	<style type="text/css">
 	body {

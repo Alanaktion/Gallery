@@ -11,7 +11,15 @@ This application requires the GD library for generation of thumbnails.
 0.5 (upcoming)
 
 - List images and files in subdirectories
-- Add file type icons (if practical)
+- Clean up file listing
+- Add file type icons (if practical, they will bloat the code)
+
+0.4.1
+
+- Generated thumbnails are now stored in a directory
+- Added thumbnail directory hiding for Windows/Linux/Mac/UNIX
+- Added option to customize window/tab title
+- Removed option to cache all thumbnails in a single file (performance issues)
 
 0.4
 
