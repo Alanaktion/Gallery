@@ -2,7 +2,7 @@
 	/*
 	*	Gallery 0.5.1 by Alan Hardman
 	*	A tiny drop-in photo gallery with desktop and mobile support
-	*   (this thing works great on iPhone)
+	*	(this thing works great on iPhone)
 	*/
 
 	///////////////////
@@ -13,14 +13,14 @@
 	$title = 'Gallery';
 	
 	$newtab = false; // open images in a new tab when clicked.
-	$dir   = '.';    // the directory to get images from, use '.' for the current directory.
+	$dir   = '.';    // the directory to get images from, use '.' for the current directory; relative paths are recommended.
 	$size  = 150;    // thumbnail width/height in pixels.  150 is recommended for best display, mobile resizes to 75px on client-side.
 	$label = true;   // show labels on photos
 	$lhov  = false;  // show photo labels only on hover
 	$cache = 30*24;  // client-side thumbnail cache time in hours
 	$save  = true;   // save the generated thumbnails to prevent them from generating again on every page load
-	$hide  = true;   // hide thumbnail directory (.thm/ instead of thm/, also sets the Hidden attribute on Windows)
-	$sort  = true;   // sort files by name (otherwise they are ordered by the filesystem)
+	$hide  = true;   // hide thumbnail directory (.thm/ instead of thm/, or sets the Hidden attribute on Windows)
+	$sort  = true;   // sort files by name (otherwise they are displayed in the filesystem order)
 	$types = array(  // file types to attempt to open as images
 		'jpg',
 		'jpeg',
@@ -37,11 +37,9 @@
 		'rar'
 	);
 	
-	$debug = true;  // Enable debug logging
-	
 	// Initialize a couple things
 	define('IS_WIN',(strncasecmp(PHP_OS,'WIN',3)==0) ? true: false);
-	$thisf  = basename(__FILE__); // Detect PHP file name
+	$thisf = basename(__FILE__); // Detect PHP file name
 	
 	////////////////
 	// Thumbnails //
@@ -89,7 +87,7 @@
 		$img = @imagecreatefromstring(file_get_contents($dir.'/'.$src)); // load image file
 		$res = imagecreatetruecolor($size,$size);  // create empty canvas for thumbnail
 		$w = imagecolorallocate($res,255,255,255); // allocate white background color
-		imagefill($res,0,0,$w);                    // fill image with white
+		imagefill($res,0,0,$w);	                   // fill image with white
 		
 		// get smaller of image's dimensions
 		$d = (imagesx($img)>imagesy($img)) ? imagesy($img) : imagesx($img);
@@ -173,9 +171,9 @@
 	}
 	a > span {
 		position: absolute;
-		bottom: 0;
-		right: 0;
-		left: 0;
+		bottom: 1px;
+		right: 1px;
+		left: 1px;
 		padding: 5px;
 		font-size: 14px;
 		background: black;
@@ -234,23 +232,49 @@
 		padding: 0;
 	}
 	
-	@media only screen and (max-device-width: 480px),(max-device-width: 640px) {
-		div {
-			max-width: none;
-		}
+	/* iPad Landscape, Small Desktop, Other small screens */
+	@media only screen and (max-width: 960px) {
+		div {max-width: 912px;}
 		a {
-			margin: 2px;
+			margin: 1px;
 			border: none;
+		}
+		a > span {
+			bottom: 0;
+			right: 0;
+			left: 0;
 		}
 		img {
 			padding: 0;
-			width: 75px;
-			height: 75px;
+			width: 150px;
+			height: 150px;
 			-webkit-box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
 			   -moz-box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
 			        box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
 		}
 	}
+	
+	/* iPad Portrait */
+	@media only screen and (max-width: 768px) {
+		div {max-width: 760px;}
+	}
+	
+	/* Mobile */
+	@media only screen and (max-width: 640px) {
+		div {max-width: none;}
+		img {
+			width: 75px;
+			height: 75px;
+		}
+	}
+	
+	/* Large Desktop Sizes */
+	@media only screen and (min-width: 1200px){div{max-width: 1092px;}}
+	@media only screen and (min-width: 1280px){div{max-width: 1248px;}}
+	@media only screen and (min-width: 1440px){div{max-width: 1404px;}}
+	@media only screen and (min-width: 1600px){div{max-width: 1560px;}}
+	@media only screen and (min-width: 2048px){div{max-width: 2028px;}}
+	@media only screen and (min-width: 2560px){div{max-width: 2496px;}}
 	</style>
 </head>
 <body>
@@ -260,8 +284,16 @@
 	foreach($imgs as $i) {
 		echo '<a href="'.$dir.'/'.$i.'" target="'.($newtab ? '_blank' : '_self').'">';
 		echo '<img src="'.$thisf.'?t='.urlencode($i).'" alt="'.$i.'">';
-		if($label)
-			echo '<span>'.htmlspecialchars($i).'</span>';
+		if($label) {
+			$cap = $i;
+			if(in_array(pathinfo($i,PATHINFO_EXTENSION),array('jpg','jpeg','jpe','jfif'))) {
+				$comments = exif_read_data($dir.$i,'COMMENTS');
+				if($comments!==false)
+					$cap = $comments[0];
+				unset($comments);
+			}
+			echo '<span>'.nl2br(htmlspecialchars($cap)).'</span>';
+		}
 		echo '</a>';
 	}
 	echo '</div>';

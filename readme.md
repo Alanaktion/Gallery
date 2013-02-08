@@ -13,6 +13,11 @@ Upcoming Features
 - Allow listing of images and files in subdirectories
 - Clean up file listing
 
+0.5.2
+
+- Support for many more screen sizes from iPhone to Apple Cinema Display with a 2560px width.
+- Captions now use embedded EXIF Comments if available
+
 0.5.1
 
 - Added new supported file types
