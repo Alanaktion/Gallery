@@ -287,8 +287,8 @@
 		if($label) {
 			$cap = $i;
 			if(in_array(pathinfo($i,PATHINFO_EXTENSION),array('jpg','jpeg','jpe','jfif'))) {
-				$comments = exif_read_data($dir.$i,'COMMENTS');
-				if($comments!==false)
+				$comments = exif_read_data($dir.'/'.$i,'COMMENTS');
+				if($comments!==false && $comments[0])
 					$cap = $comments[0];
 				unset($comments);
 			}
