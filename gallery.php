@@ -1,6 +1,6 @@
 <?php
 	/*
-	*	Gallery 0.5 by Alan Hardman
+	*	Gallery 0.5.1 by Alan Hardman
 	*	A tiny drop-in photo gallery with desktop and mobile support
 	*   (this thing works great on iPhone)
 	*/
@@ -15,6 +15,8 @@
 	$newtab = false; // open images in a new tab when clicked.
 	$dir   = '.';    // the directory to get images from, use '.' for the current directory.
 	$size  = 150;    // thumbnail width/height in pixels.  150 is recommended for best display, mobile resizes to 75px on client-side.
+	$label = true;   // show labels on photos
+	$lhov  = false;  // show photo labels only on hover
 	$cache = 30*24;  // client-side thumbnail cache time in hours
 	$save  = true;   // save the generated thumbnails to prevent them from generating again on every page load
 	$hide  = true;   // hide thumbnail directory (.thm/ instead of thm/, also sets the Hidden attribute on Windows)
@@ -23,6 +25,7 @@
 		'jpg',
 		'jpeg',
 		'jpe',
+		'jfif',
 		'png',
 		'gif',
 		'bmp'
@@ -38,6 +41,7 @@
 	
 	// Initialize a couple things
 	define('IS_WIN',(strncasecmp(PHP_OS,'WIN',3)==0) ? true: false);
+	$thisf  = basename(__FILE__); // Detect PHP file name
 	
 	////////////////
 	// Thumbnails //
@@ -68,10 +72,10 @@
 		
 		// Output thumbnail
 		if($save && is_file($sdir.'/'.$_GET['t'].'.jpg')) {
-			// Individual thumbnail file exists
+			// Thumbnail cache exists, output
 			readfile($sdir.'/'.$_GET['t'].'.jpg');
 		} else {
-			// No thumbnail cache exists, not using compact cache
+			// No thumbnail cache exists, generate thumbnail
 			mkthumb($_GET['t']);
 		}
 		
@@ -150,6 +154,8 @@
 		margin: 0;
 		padding: 2px;
 		background: white;
+		font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+		font-size: 20px;
 	}
 	div {
 		margin: 0;
@@ -158,16 +164,46 @@
 		margin: 0 auto;
 	}
 	a {
-		display: block;
+		position: relative;
+		display: inline-block;
 		color: inherit;
-		float: left;
 		margin: 1px;
 		padding: 0;
 		border: 1px solid grey;
 	}
+	a > span {
+		position: absolute;
+		bottom: 0;
+		right: 0;
+		left: 0;
+		padding: 5px;
+		font-size: 14px;
+		background: black;
+		background: rgba(0,0,0,.4);
+		color: white;
+		text-align: center;
+		text-decoration: none;
+		white-space: nowrap;
+		overflow: hidden;
+		-o-text-overflow: ellipsis;
+		   text-overflow: ellipsis;
+		text-shadow: 0 1px 1px rgba(0,0,0,.7);
+		-webkit-transition: background .2s ease;
+		   -moz-transition: background .2s ease;
+		        transition: background .2s ease;
+<?php if($lhov) { ?>
+		visibility: hidden;
+<?php } ?>
+	}
+	a:hover > span {
+		text-decoration: underline;
+		background: rgba(0,0,0,.7);
+<?php if($lhov) { ?>
+		visibility: visible;
+<?php } ?>
+	}
 	p > a {
 		display: inline;
-		float: none;
 		margin: auto;
 		border: none;
 		color: inherit;
@@ -187,8 +223,6 @@
 		padding: 0;
 		height: 45px;
 		line-height: 45px;
-		font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
-		font-size: 20px;
 		text-align: center;
 		color: #808895;
 	}
@@ -213,8 +247,8 @@
 			width: 75px;
 			height: 75px;
 			-webkit-box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
-			-moz-box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
-			box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
+			   -moz-box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
+			        box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
 		}
 	}
 	</style>
@@ -225,7 +259,9 @@
 	echo '<div>';
 	foreach($imgs as $i) {
 		echo '<a href="'.$dir.'/'.$i.'" target="'.($newtab ? '_blank' : '_self').'">';
-		echo '<img src="gallery.php?t='.urlencode($i).'" alt="'.$i.'">';
+		echo '<img src="'.$thisf.'?t='.urlencode($i).'" alt="'.$i.'">';
+		if($label)
+			echo '<span>'.htmlspecialchars($i).'</span>';
 		echo '</a>';
 	}
 	echo '</div>';

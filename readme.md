@@ -2,17 +2,26 @@
 
 A tiny drop-in photo gallery with desktop, mobile, and high pixel density support.
 
-Simply put the gallery.php file in any folder and it will display a gallery formatted to fit any screen, with some simple configurable options in the file.
+Simply put the gallery.php file in any folder and it will display a gallery formatted to fit any screen, with some simple configurable options in the file.  You can also rename the file to whatever you desire, it will work as an index.php file.
 
 This application requires the GD library for generation of thumbnails.
 
 ### Changelog
 
-0.5 (upcoming)
+Upcoming Features
 
-- List images and files in subdirectories
+- Allow listing of images and files in subdirectories
 - Clean up file listing
-- Add file type icons (if practical, they will bloat the code)
+
+0.5.1
+
+- Added new supported file types
+- Added photo labels
+
+0.5
+
+- Added ability to rename file
+- Improved thumbnail caching
 
 0.4.1
 
@@ -24,7 +33,7 @@ This application requires the GD library for generation of thumbnails.
 0.4
 
 - Added file listing after gallery
-- Began adding option to cache all thumbnails in a single file
+- Added option to cache all thumbnails in a single file
 
 0.3
 
