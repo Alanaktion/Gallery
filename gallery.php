@@ -168,6 +168,7 @@
 		margin: 1px;
 		padding: 0;
 		border: 1px solid grey;
+		vertical-align: bottom;
 	}
 	a > span {
 		position: absolute;
