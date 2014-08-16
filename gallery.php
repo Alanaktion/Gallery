@@ -20,7 +20,7 @@ $config = array(
 
 	"title" => "Gallery",
 
-	"directory" => "./", // Must include trailing slash!
+	"directory" => ".", // Should not include trailing slash
 
 	"include_subdirectories" => true,
 
