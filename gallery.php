@@ -1,313 +1,514 @@
 <?php
-	/*
-	*	Gallery 0.5.1 by Alan Hardman
-	*	A tiny drop-in photo gallery with desktop and mobile support
-	*	(this thing works great on iPhone)
-	*/
+/**
+ * Gallery 0.6.0
+ * The ultimate single-file photo gallery
+ * @author Alan Hardman <alan@phpizza.com>
+ */
 
-	///////////////////
-	// Configuration //
-	///////////////////
-	
-	// Page title
-	$title = 'Gallery';
-	
-	$newtab = false; // open images in a new tab when clicked.
-	$dir   = '.';    // the directory to get images from, use '.' for the current directory; relative paths are recommended.
-	$size  = 150;    // thumbnail width/height in pixels.  150 is recommended for best display, mobile resizes to 75px on client-side.
-	$label = true;   // show labels on photos
-	$lhov  = false;  // show photo labels only on hover
-	$cache = 30*24;  // client-side thumbnail cache time in hours
-	$save  = true;   // save the generated thumbnails to prevent them from generating again on every page load
-	$hide  = true;   // hide thumbnail directory (.thm/ instead of thm/, or sets the Hidden attribute on Windows)
-	$sort  = true;   // sort files by name (otherwise they are displayed in the filesystem order)
-	$types = array(  // file types to attempt to open as images
-		'jpg',
-		'jpeg',
-		'jpe',
-		'jfif',
-		'png',
-		'gif',
-		'bmp'
-	);
-	$files  = false; // list non-image files
-	$ftypes = array( // file types to list after images, leave empty to display all non-image files
-		'txt',
-		'zip',
-		'rar'
-	);
-	
-	// Initialize a couple things
-	define('IS_WIN',(strncasecmp(PHP_OS,'WIN',3)==0) ? true: false);
-	$thisf = basename(__FILE__); // Detect PHP file name
-	
-	////////////////
-	// Thumbnails //
-	////////////////
-	
-	// If request is for a thumbnail, generate it
-	if($_GET['t']) {
-		
-		// Output cache headers
-		$expires = 3600*$cache;
-		header("Pragma: public");
-		header("Cache-Control: maxage=".$expires);
-		header('Expires: '.gmdate('D, d M Y H:i:s',time()+$expires).' GMT');
-		
-		// Content type
-		header('Content-Type: image/jpeg');
-		
-		// Generate thumbnail directory
-		if($save) {
-			$sdir = $dir.'/'.(($hide && !IS_WIN) ? '.thm' : 'thm');
-			if(!is_dir($sdir)) {
-				mkdir($sdir);
-				if($hide && IS_WIN)
-					// Hide folder on Windows
-					@shell_exec('attrib +h "'.$sdir.'"');
+/**
+ * Default configuration
+ *
+ * In order to make updates easier, it's recommended to include changes to
+ * configuration in a separate file named gallery-config.php. This file will
+ * be automatically included if it exists, and can be used to override either
+ * individual configuration options or the entire $config array.
+ *
+ * Note: after changing thumbnail size, you will need to remove the existing
+ * cached thumgnail files from the hidden thm directory.
+ */
+$config = array(
+
+	"title" => "Gallery",
+
+	"directory" => "./", // Must include trailing slash!
+
+	"include_subdirectories" => true,
+
+	"image_extensions" => array(
+		"jpg",
+		"jpeg",
+		"jpe",
+		"jfif",
+		"png",
+		"gif",
+		"bmp",
+	),
+
+	"file_extensions" => array(
+		"txt",
+		"zip",
+		"rar",
+	),
+
+	"interface" => array(
+		"dark" => false,
+		"open_in_new_tab" => false,
+		"labels" => true,
+		"labels_only_on_hover" => false,
+	),
+
+	"thumbnails" => array(
+		"size" => 200,
+		"cache" => true,
+	)
+
+);
+
+// Include user configuration file if it exists
+if(is_file("gallery-config.php")) {
+	include "gallery-config.php";
+}
+
+
+
+// Determine if we're on a Windows system
+define("IS_WIN", (strncasecmp(PHP_OS, "WIN", 3) == 0) ? true : false);
+
+// Get the current filename for use in thumbnail, file, and folder links
+$self = basename(__FILE__);
+
+// Get the requested gallery folder
+$dir_level = 0;
+$config["base_directory"] = $config["directory"];
+if(!empty($_GET["dir"])) {
+	$_GET["dir"] = trim($_GET["dir"], "/");
+	if(strpos($_GET["dir"], "..") === false && is_dir($config["directory"] . $_GET["dir"])) {
+		$config["directory"] .= $_GET["dir"];
+		$dir_level = substr_count($_GET["dir"], "/") + 1;
+	}
+}
+
+$dir = rtrim($config["directory"], "/");
+$current_dir = ltrim($dir, "./");
+
+
+
+// Handle thumbnail generation requests
+if(!empty($_GET["thm"])) {
+
+	// Send client-side caching headers
+	$expires = 3600 * 30 * 24;
+	header("Pragma: public");
+	header("Cache-Control: maxage=" . $expires);
+	header("Expires: " . gmdate("D, d M Y H:i:s", time() + $expires) . " GMT");
+
+	// Determine thumbnail cache directory
+	if($config["thumbnails"]["cache"]) {
+		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
+		if(!is_dir($cache_dir)) {
+			mkdir($cache_dir);
+			if(IS_WIN) {
+				// Hide folder on Windows
+				@shell_exec("attrib +h {$cache_dir}");
 			}
 		}
-		
-		// Output thumbnail
-		if($save && is_file($sdir.'/'.$_GET['t'].'.jpg')) {
-			// Thumbnail cache exists, output
-			readfile($sdir.'/'.$_GET['t'].'.jpg');
-		} else {
-			// No thumbnail cache exists, generate thumbnail
-			mkthumb($_GET['t']);
-		}
-		
-		// All done
-		exit();
 	}
-	
-	// Make Thumbnail from $src
-	function mkthumb($src,$output = true) {
-		global $save,$size,$dir,$sdir;
-		$img = @imagecreatefromstring(file_get_contents($dir.'/'.$src)); // load image file
-		$res = imagecreatetruecolor($size,$size);  // create empty canvas for thumbnail
-		$w = imagecolorallocate($res,255,255,255); // allocate white background color
-		imagefill($res,0,0,$w);	                   // fill image with white
-		
-		// get smaller of image's dimensions
-		$d = (imagesx($img)>imagesy($img)) ? imagesy($img) : imagesx($img);
-		
-		// crop, resize, and copy from source image
-		imagecopyresampled($res,$img,0,0,(imagesx($img)-$d)/2,(imagesy($img)-$d)/2,$size,$size,$d,$d);
-		
-		// output generated image
-		if($save) {
-			imagejpeg($res,$sdir.'/'.$_GET['t'].'.jpg');
-			if($output)
-				readfile($sdir.'/'.$_GET['t'].'.jpg');
-		} else
-			imagejpeg($res);
-	}
-	
-	/////////////
-	// Gallery //
-	/////////////
-	
-	// Get list of images
-	$imgs = array();
-	$h = @opendir($dir);
-	while($f = @readdir($h))
-		if(in_array(pathinfo($f,PATHINFO_EXTENSION),$types)) { // select files with desired $types
-			$s = getimagesize($f); // get image information
-			if($s[0] && $s[1])     // check if image is valid
-				$imgs[] = $f;      // add image to list
+
+	// Output thumbnail
+	$file = empty($_GET["dir"]) ? sha1($_GET["thm"]) : sha1($_GET["dir"] . $_GET["thm"]);
+	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . ".jpg")) {
+		// Thumbnail cache exists, output it
+		header("Content-Type: image/jpeg");
+		readfile($cache_dir . "/" . $file . ".jpg");
+	} else {
+		// No thumbnail cache exists, generate thumbnail
+		if(strpos($_GET["thm"], "..") === false && is_file($dir . "/" . $_GET["thm"])) {
+			$src = $dir . "/" . $_GET["thm"];
+			mkthumb($src, $config);
 		}
-	closedir($h);
-	
-	if($sort)
-		sort($imgs);
-	
-	// Get list of files if enabled
-	if($files) {
-		array_push($types,'tmp','thm');
-		$fils = array();
-		$h = @opendir($dir);
-		while($f = @readdir($h))
-			if(empty($ftypes) && $f!='.' && $f!='..') {
-				if(!in_array(pathinfo($f,PATHINFO_EXTENSION),$types)) // do not include images
-					$fils[] = $f; // add file to list
-			} else {
-				if(in_array(pathinfo($f,PATHINFO_EXTENSION),$ftypes)) // select files with desired $ftypes
-					$fils[] = $f; // add file to list
+	}
+
+	// All done.
+	exit();
+
+}
+
+/**
+ * Generate and optionally save a thumbnail image
+ * @param  string $src
+ * @param  array  $config
+ */
+function mkthumb($src, array $config) {
+
+	// Load image file, create canvas for new image, and fill it with white
+	$img = @imagecreatefromstring(file_get_contents($config["base_directory"] . "/" . $src));
+	if(!$img) {
+		return false;
+	}
+
+	$res = imagecreatetruecolor($config["thumbnails"]["size"], $config["thumbnails"]["size"]);
+	$w = imagecolorallocate($res, 255, 255, 255);
+	imagefill($res, 0, 0, $w);
+
+	// Get smaller of image's dimensions
+	$d = (imagesx($img) > imagesy($img)) ? imagesy($img) : imagesx($img);
+
+	// Crop, resize, and copy from source image
+	imagecopyresampled(
+		$res, $img,
+		0, 0,
+		(imagesx($img) - $d) / 2, (imagesy($img) - $d) / 2,
+		$config["thumbnails"]["size"], $config["thumbnails"]["size"],
+		$d, $d
+	);
+
+
+	// Save/output generated image
+	if($config["thumbnails"]["cache"]) {
+		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
+		$file = empty($_GET["dir"]) ? sha1($_GET["thm"]) : sha1($_GET["dir"] . $_GET["thm"]);
+		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
+
+		header("Content-Type: image/jpeg");
+		readfile($cache_dir . "/" . $file . ".jpg");
+	} else {
+		header("Content-Type: image/jpeg");
+		imagejpeg($res);
+	}
+}
+
+
+
+// Handle directory thumbnails
+if(!empty($_GET["dirthm"])) {
+
+	// Send client-side caching headers
+	$expires = 3600 * 30 * 24;
+	header("Pragma: public");
+	header("Cache-Control: maxage=" . $expires);
+	header("Expires: " . gmdate("D, d M Y H:i:s", time() + $expires) . " GMT");
+
+	// Determine thumbnail cache directory
+	if($config["thumbnails"]["cache"]) {
+		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
+		if(!is_dir($cache_dir)) {
+			mkdir($cache_dir);
+			if(IS_WIN) {
+				// Hide folder on Windows
+				@shell_exec("attrib +h {$cache_dir}");
 			}
-		closedir($h);
-		
-		if($sort)
-			sort($fils);
+		}
 	}
+
+	// Output thumbnail
+	$file = sha1($dir . "/" . $_GET["dirthm"]);
+	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . ".jpg")) {
+		// Thumbnail cache exists, output it
+		header("Content-Type: image/jpeg");
+		readfile($cache_dir . "/" . $file . ".jpg");
+	} else {
+		// No thumbnail cache exists, generate thumbnail
+		if(strpos($_GET["dirthm"], "..") === false && is_dir($dir . "/" . $_GET["dirthm"])) {
+			$src = $dir . "/" . $_GET["dirthm"];
+			mkdirthumb($src, $config);
+		}
+	}
+
+	// All done.
+	exit();
+
+}
+
+/**
+ * Generate and optionally save a thumbnail image
+ * @param  string $src
+ * @param  array  $config
+ */
+function mkdirthumb($src, array $config) {
+
+	// Find up to 4 image files in directory
+	$images = array();
+	$dh = opendir($src);
+	while(($f = readdir($dh)) !== false && count($images) < 4) {
+		// Check if file matches the image file extensions
+		if(in_array(pathinfo($src . "/" . $f, PATHINFO_EXTENSION), $config["image_extensions"])) {
+			// Attempt to get image metadata, and add it if successful
+			$s = getimagesize($src . "/" . $f);
+			if($s[0] && $s[1]) {
+				$images[] = $f;
+			}
+		}
+	}
+	closedir($dh);
+
+	// Create canvas for new image, and fill it with white
+	$res = imagecreatetruecolor($config["thumbnails"]["size"], $config["thumbnails"]["size"]);
+	$w = imagecolorallocate($res, 255, 255, 255);
+	imagefill($res, 0, 0, $w);
+
+	// Add images to thumbnail
+	$i = 0;
+	foreach($images as $f) {
+		$img = imagecreatefromstring(file_get_contents($src . "/" . $f));
+
+		// Get smaller of image's dimensions
+		$d = (imagesx($img) > imagesy($img)) ? imagesy($img) : imagesx($img);
+
+		// Crop, resize, and copy from source image
+		imagecopyresampled(
+			$res, $img,
+			($i % 2) * $config["thumbnails"]["size"] / 2, intval($i >= 2) * $config["thumbnails"]["size"] / 2,
+			(imagesx($img) - $d) / 2, (imagesy($img) - $d) / 2,
+			$config["thumbnails"]["size"] / 2, $config["thumbnails"]["size"] / 2,
+			$d, $d
+		);
+
+		$i++;
+	}
+
+	// Save/output generated image
+	if($config["thumbnails"]["cache"]) {
+		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
+		$file = sha1($src);
+		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
+
+		header("Content-Type: image/jpeg");
+		readfile($cache_dir . "/" . $file . ".jpg");
+	} else {
+		header("Content-Type: image/jpeg");
+		imagejpeg($res);
+	}
+}
+
+
+
+// Scan folder for images and files
+$directories = array();
+$images = array();
+$files = array();
+$dh = opendir($dir);
+while(($f = readdir($dh)) !== false) {
+
+	// Check if we're including directories and if the current item is a directory
+	if($config["include_subdirectories"] && is_dir($dir . "/" . $f) && substr($f, 0, 1) != ".") {
+		$directories[] = $f;
+	}
+
+	// Check if file matches the image file extensions
+	if(in_array(pathinfo($dir . "/" . $f, PATHINFO_EXTENSION), $config["image_extensions"])) {
+		// Attempt to get image metadata, and add it if successful
+		$s = getimagesize($dir . "/" . $f);
+		if($s[0] && $s[1]) {
+			$images[] = $f;
+		}
+	}
+
+	// Check if file matches the generic file extensions
+	if(!empty($config["file_extensions"]) && in_array(pathinfo($dir . "/" . $f, PATHINFO_EXTENSION), $config["file_extensions"])) {
+		$files[] = $f;
+	}
+
+}
+closedir($dh);
+
+// Remove hidden items on Windows
+if(IS_WIN) {
+	exec("DIR \"{$dir}\" /AH /B", $hidden);
+	foreach($hidden as $item) {
+		if($key = array_search(trim($item), $directories)) {
+			unset($directories[$key]);
+		}
+		if($key = array_search(trim($item), $images)) {
+			unset($images[$key]);
+		}
+		if($key = array_search(trim($item), $files)) {
+			unset($files[$key]);
+		}
+	}
+}
+
+sort($images);
+sort($files);
 
 ?>
 <!doctype html>
 <html>
 <head>
-	<title><?php echo $title; ?></title>
+	<meta charset="utf-8">
+	<title><?php echo $config["title"]; ?></title>
 	<meta name="viewport" content="width=device-width,maximum-scale=1">
 	<style type="text/css">
+	html, body {
+		height: 100%;
+		margin: 0;
+		padding: 0;
+	}
 	body {
-		margin: 0;
-		padding: 2px;
-		background: white;
-		font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
-		font-size: 20px;
-	}
-	div {
-		margin: 0;
-		padding: 0;
-		max-width: 936px;
-		margin: 0 auto;
-	}
-	a {
-		position: relative;
-		display: inline-block;
-		color: inherit;
-		margin: 1px;
-		padding: 0;
-		border: 1px solid grey;
-		vertical-align: bottom;
-	}
-	a > span {
-		position: absolute;
-		bottom: 1px;
-		right: 1px;
-		left: 1px;
-		padding: 5px;
+		font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 		font-size: 14px;
-		background: black;
-		background: rgba(0,0,0,.4);
-		color: white;
-		text-align: center;
+		line-height: 1.42857;
+		color: #333;
+		background-color: #FFF;
+	}
+	.container {
+		margin: 0 auto;
+		padding: 2px 0;
+	}
+
+	.breadcrumbs {
+		padding: 0 15px;
+		font-size: 16px;
+	}
+	.breadcrumbs a {
+		color: #428BCA;
 		text-decoration: none;
+	}
+	.breadcrumbs a:hover,
+	.breadcrumbs a:focus {
+		color: #2A6496;
+		text-decoration: underline;
+	}
+
+	a.dir,
+	a.image,
+	a.file {
+		position: relative;
+		display: block;
+		width: <?php echo $config["thumbnails"]["size"]; ?>px;
+		height: <?php echo $config["thumbnails"]["size"]; ?>px;
+		border: 1px solid #fff;
+		outline: 1px solid #777;
+		margin: 2px;
+		float: left;
+		text-decoration: none;
+	}
+	a.dir:after,
+	a.image:after,
+	a.file:after {
+		content: '';
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		box-shadow: 1px 1px 0 rgba(255, 255, 255, 0.2) inset,
+					-1px -1px 0 rgba(255, 255, 255, 0.2) inset;
+	}
+	a.dir {background-color: #eee;}
+	a.dir:hover, a.dir:focus {background-color: #f5f5f5;}
+	a.image {background-color: #fff;}
+	a.file {
+		background-color: #444;
+		background-image: url('data:image/svg+xml;utf8,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22UTF-8%22%20standalone%3D%22no%22%20%3F%3E%3Csvg%20width%3D%2264px%22%20height%3D%2278px%22%20viewBox%3D%220%200%2064%2078%22%20version%3D%221.1%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20xmlns%3Axlink%3D%22http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%22%3E%3Cg%20stroke%3D%22none%22%20stroke-width%3D%221%22%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cpath%20d%3D%22M20%2C0%20L0%2C20%20L0%2C78%20L64%2C78%20L64%2C0%20L20%2C0%20Z%22%20fill%3D%22%23D5D5D5%22%3E%3C%2Fpath%3E%3Cpath%20d%3D%22M0.166992188%2C20.0644531%20L20%2C20.0644531%20L20%2C0%20L0.166992188%2C20.0644531%20Z%22%20fill%3D%22%23F5F5F5%22%3E%3C%2Fpath%3E%3C%2Fg%3E%3C%2Fsvg%3E');
+		background-position: center center;
+		background-repeat: no-repeat;
+	}
+	a.file:hover, a.file:focus {background-color: #4c4c4c;}
+	a img {
+		display: block;
+		max-width: 100%;
+		height: auto;
+	}
+	a:hover img, a:focus img {opacity: 0.92;}
+	a span {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		padding: 5px;
+		text-align: center;
 		white-space: nowrap;
 		overflow: hidden;
-		-o-text-overflow: ellipsis;
-		   text-overflow: ellipsis;
-		text-shadow: 0 1px 1px rgba(0,0,0,.7);
-		-webkit-transition: background .2s ease;
-		   -moz-transition: background .2s ease;
-		        transition: background .2s ease;
-<?php if($lhov) { ?>
-		visibility: hidden;
-<?php } ?>
+		text-overflow: ellipsis;
+		background: #000;
+		background: rgba(0, 0, 0, .5);
+		color: #fff;
 	}
-	a:hover > span {
-		text-decoration: underline;
-		background: rgba(0,0,0,.7);
-<?php if($lhov) { ?>
-		visibility: visible;
-<?php } ?>
-	}
-	p > a {
-		display: inline;
-		margin: auto;
-		border: none;
-		color: inherit;
-	}
-	img {
-		display: block;
-		border: none;
-		margin: 0;
-		padding: 1px;
-		width: <?php echo $size; ?>px;
-		height: <?php echo $size; ?>px;
-	}
-	p {
-		display: block;
-		clear: both;
-		margin: 0;
-		padding: 0;
-		height: 45px;
-		line-height: 45px;
+	<?php if($config["interface"]["labels_only_on_hover"]) { ?>
+		a.image span {
+			opacity: 0;
+			transition: opacity .3s ease-out;
+		}
+		a.image:hover span,
+		a.image:focus span {
+			opacity: 1;
+			transition: none;
+		}
+	<?php } ?>
+
+	footer {
+		padding: 10px;
+		font-size: 16px;
 		text-align: center;
-		color: #808895;
+		color: #777;
 	}
-	hr {
-		height: 0;
-		border: none;
-		border-top: 1px solid #808895;
-		margin: 10px 0;
-		padding: 0;
+	.clear {clear: both;}
+
+	/* Grid breakpoints */
+<?php $c = 3; ?>
+<?php while(($config["thumbnails"]["size"] + 6) * $c++ < 3400) { ?>
+	@media only screen and (min-width: <?php echo ($config["thumbnails"]["size"] + 6) * $c; ?>px) {
+		.container{max-width: <?php echo ($config["thumbnails"]["size"] + 6) * $c; ?>px}
 	}
-	
-	/* iPad Landscape, Small Desktop, Other small screens */
-	@media only screen and (max-width: 960px) {
-		div {max-width: 912px;}
-		a {
-			margin: 1px;
-			border: none;
-		}
-		a > span {
-			bottom: 0;
-			right: 0;
-			left: 0;
-		}
-		img {
-			padding: 0;
-			width: 150px;
-			height: 150px;
-			-webkit-box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
-			   -moz-box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
-			        box-shadow: 0 0 2px rgba(0,0,0,.4) inset;
-		}
+<?php } ?>
+	@media only screen and (max-width: <?php echo ($config["thumbnails"]["size"] + 6) * 4; ?>px) {
+		.container{max-width: none !important;}
+		a.dir, a.image, a.file {width: <?php echo $config["thumbnails"]["size"] / 2; ?>px; height: <?php echo $config["thumbnails"]["size"] / 2; ?>px;}
+		a.file {background-size: 32px 39px;}
 	}
-	
-	/* iPad Portrait */
-	@media only screen and (max-width: 768px) {
-		div {max-width: 760px;}
+</style>
+<?php if(!empty($config["interface"]["dark"])) { ?>
+<style type="text/css">
+	body {
+		background: #111;
+		color: #ccc;
 	}
-	
-	/* Mobile */
-	@media only screen and (max-width: 640px) {
-		div {max-width: none;}
-		img {
-			width: 75px;
-			height: 75px;
-		}
+	a.dir, a.image, a.file {
+		border-color: #000;
+		outline-color: #222;
 	}
-	
-	/* Large Desktop Sizes */
-	@media only screen and (min-width: 1200px){div{max-width: 1092px;}}
-	@media only screen and (min-width: 1280px){div{max-width: 1248px;}}
-	@media only screen and (min-width: 1440px){div{max-width: 1404px;}}
-	@media only screen and (min-width: 1600px){div{max-width: 1560px;}}
-	@media only screen and (min-width: 2048px){div{max-width: 2028px;}}
-	@media only screen and (min-width: 2560px){div{max-width: 2496px;}}
-	</style>
+	a.dir:hover, a.dir:focus, a.image:hover, a.image:focus, a.file:hover, a.file:focus {
+		outline-color: #444;
+	}
+</style>
+<?php } ?>
 </head>
 <body>
-<?php
-	// Output image list
-	echo '<div>';
-	foreach($imgs as $i) {
-		echo '<a href="'.$dir.'/'.$i.'" target="'.($newtab ? '_blank' : '_self').'">';
-		echo '<img src="'.$thisf.'?t='.urlencode($i).'" alt="'.$i.'">';
-		if($label) {
-			$cap = $i;
-			if(in_array(pathinfo($i,PATHINFO_EXTENSION),array('jpg','jpeg','jpe','jfif'))) {
-				$comments = exif_read_data($dir.'/'.$i,'COMMENTS');
-				if($comments!==false && $comments[0])
-					$cap = $comments[0];
-				unset($comments);
-			}
-			echo '<span>'.nl2br(htmlspecialchars($cap)).'</span>';
-		}
-		echo '</a>';
-	}
-	echo '</div>';
-	
-	// Show number of pictures
-	echo '<p>'.count($imgs).' Pictures</p>';
-	
-	// Output file list
-	if($fils) {
-		echo '<hr>';
-		foreach($fils as $f)
-			echo '<p><a href="'.$dir.'/'.$f.'" target="'.($newtab ? '_blank' : '_self').'">'.$f.'</a>';
-	}
-?>
+	<div class="container">
+		<?php if($dir_level) { ?>
+			<p class="breadcrumbs"><a href="<?php echo $self; ?>"><?php echo $config["title"]; ?></a> /
+				<?php
+				$levels = explode("/", $current_dir);
+				$i = 0;
+				foreach($levels as $lvl) {
+					$i++;
+					$n = 0;
+					$link_dir = $current_dir;
+					while($n++ < $dir_level - $i) {
+						$link_dir = dirname($link_dir);
+					}
+				?>
+					<a href="<?php echo $self; ?>?dir=<?php echo urlencode($link_dir); ?>"><?php echo $lvl; ?></a> /
+				<?php
+				}
+				?>
+			</a></p>
+		<?php } ?>
+
+		<?php foreach($directories as $d) { ?>
+			<a class="dir" href="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir . "/" . $d); ?>" title="<?php echo $d; ?>">
+				<img src="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;dirthm=<?php echo urlencode($d); ?>">
+				<span><?php echo $d; ?></span>
+			</a>
+		<?php } ?>
+
+		<?php foreach($images as $i) { ?>
+			<a class="image" href="<?php echo $dir . "/" . $i; ?>" title="<?php echo $i; ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+				<img src="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;thm=<?php echo urlencode($i); ?>">
+				<?php if($config["interface"]["labels"]) { ?>
+					<span><?php echo $i; ?></span>
+				<?php } ?>
+			</a>
+		<?php } ?>
+
+		<?php foreach($files as $f) { ?>
+			<a class="file" href="<?php echo $dir . "/" . $f; ?>" title="<?php echo $f; ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+				<span><?php echo $f; ?></span>
+			</a>
+		<?php } ?>
+
+		<div class="clear"></div>
+		<footer><?php echo count($directories) + count($images) + count($files); ?> items</footer>
+	</div>
 </body>
 </html>

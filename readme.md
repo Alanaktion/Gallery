@@ -1,6 +1,6 @@
 ## Gallery
 
-A tiny drop-in photo gallery with desktop, mobile, and high pixel density support.
+The ultimate single-file PHP photo gallery
 
 Simply put the gallery.php file in any folder and it will display a gallery formatted to fit any screen, with some simple configurable options in the file.  You can also rename the file to whatever you desire, it will work as an index.php file.
 
@@ -8,10 +8,17 @@ This application requires the GD library for generation of thumbnails.
 
 ### Changelog
 
-Upcoming Features
+0.6.0
 
-- Allow listing of images and files in subdirectories
-- Clean up file listing
+- Completely rewritten codebase
+- Added nested subdirectory support
+- Added breadcrumbs
+- Added dark theme
+- Added new configuration format
+- Added new dynamic thumbnail sizing
+- Added Windows hidden filesystem object detection
+- Improved thumbnail cache storage
+- Removed EXIF comment support
 
 0.5.2
 
@@ -57,4 +64,4 @@ Upcoming Features
 - First release
 
 ### Live demo
-http://www.alanaktion.com/a/alan/gallery/
+https://phpizza.com/~alan/gallery/
