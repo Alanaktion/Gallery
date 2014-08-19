@@ -72,7 +72,7 @@ $dir_level = 0;
 $config["base_directory"] = $config["directory"];
 if(!empty($_GET["dir"])) {
 	$_GET["dir"] = trim($_GET["dir"], "/");
-	if(strpos($_GET["dir"], "..") === false && is_dir($config["directory"] . $_GET["dir"])) {
+	if(strpos($_GET["dir"], "../") === false && is_dir($config["directory"] . $_GET["dir"])) {
 		$config["directory"] .= $_GET["dir"];
 		$dir_level = substr_count($_GET["dir"], "/") + 1;
 	}
@@ -112,7 +112,7 @@ if(!empty($_GET["thm"])) {
 		readfile($cache_dir . "/" . $file . ".jpg");
 	} else {
 		// No thumbnail cache exists, generate thumbnail
-		if(strpos($_GET["thm"], "..") === false && is_file($dir . "/" . $_GET["thm"])) {
+		if(strpos($_GET["thm"], "../") === false && is_file($dir . "/" . $_GET["thm"])) {
 			$src = $dir . "/" . $_GET["thm"];
 			mkthumb($src, $config);
 		}
@@ -198,7 +198,7 @@ if(!empty($_GET["dirthm"])) {
 		readfile($cache_dir . "/" . $file . ".jpg");
 	} else {
 		// No thumbnail cache exists, generate thumbnail
-		if(strpos($_GET["dirthm"], "..") === false && is_dir($dir . "/" . $_GET["dirthm"])) {
+		if(strpos($_GET["dirthm"], "../") === false && is_dir($dir . "/" . $_GET["dirthm"])) {
 			$src = $dir . "/" . $_GET["dirthm"];
 			mkdirthumb($src, $config);
 		}
