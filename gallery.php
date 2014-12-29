@@ -41,10 +41,10 @@ $config = array(
 	),
 
 	"interface" => array(
-		"dark" => false,
+		"dark" => true,
 		"open_in_new_tab" => false,
 		"labels" => true,
-		"labels_only_on_hover" => false,
+		"labels_only_on_hover" => true,
 	),
 
 	"thumbnails" => array(
@@ -280,7 +280,7 @@ $dh = opendir($dir);
 while(($f = readdir($dh)) !== false) {
 
 	// Check if we're including directories and if the current item is a directory
-	if($config["include_subdirectories"] && is_dir($dir . "/" . $f) && substr($f, 0, 1) != ".") {
+	if($config["include_subdirectories"] && is_dir($dir . "/" . $f) && substr($f, 0, 1) != "." && $f != 'thm') {
 		$directories[] = $f;
 	}
 
