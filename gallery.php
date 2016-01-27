@@ -221,7 +221,7 @@ function mkdirthumb($src, array $config) {
 	$dh = opendir($src);
 	while(($f = readdir($dh)) !== false && count($images) < 4) {
 		// Check if file matches the image file extensions
-		if(in_array(pathinfo($src . "/" . $f, PATHINFO_EXTENSION), $config["image_extensions"])) {
+		if(in_array(strtolower(pathinfo($src . "/" . $f, PATHINFO_EXTENSION)), $config["image_extensions"])) {
 			// Attempt to get image metadata, and add it if successful
 			$s = getimagesize($src . "/" . $f);
 			if($s[0] && $s[1]) {
@@ -285,7 +285,7 @@ while(($f = readdir($dh)) !== false) {
 	}
 
 	// Check if file matches the image file extensions
-	if(in_array(pathinfo($dir . "/" . $f, PATHINFO_EXTENSION), $config["image_extensions"])) {
+	if(in_array(strtolower(pathinfo($dir . "/" . $f, PATHINFO_EXTENSION)), $config["image_extensions"])) {
 		// Attempt to get image metadata, and add it if successful
 		$s = getimagesize($dir . "/" . $f);
 		if($s[0] && $s[1]) {
@@ -294,7 +294,7 @@ while(($f = readdir($dh)) !== false) {
 	}
 
 	// Check if file matches the generic file extensions
-	if(!empty($config["file_extensions"]) && in_array(pathinfo($dir . "/" . $f, PATHINFO_EXTENSION), $config["file_extensions"])) {
+	if(!empty($config["file_extensions"]) && in_array(strtolower(pathinfo($dir . "/" . $f, PATHINFO_EXTENSION)), $config["file_extensions"])) {
 		$files[] = $f;
 	}
 
