@@ -8,6 +8,11 @@ This application requires the GD library for generation of thumbnails.
 
 ### Changelog
 
+0.6.1
+
+- High-DPI thumbnails
+- Automatic dark theme
+
 0.6.0
 
 - Completely rewritten codebase
