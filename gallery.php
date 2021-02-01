@@ -14,7 +14,7 @@
  * individual configuration options or the entire $config array.
  *
  * Note: after changing thumbnail size, you will need to remove the existing
- * cached thumgnail files from the hidden thm directory.
+ * cached thumbnail files from the hidden thm directory.
  */
 $config = array(
 
@@ -41,7 +41,7 @@ $config = array(
 	),
 
 	"interface" => array(
-		"dark" => true,
+		"dark" => "auto",
 		"open_in_new_tab" => false,
 		"labels" => true,
 		"labels_only_on_hover" => true,
@@ -106,6 +106,10 @@ if(!empty($_GET["thm"])) {
 
 	// Output thumbnail
 	$file = empty($_GET["dir"]) ? sha1($_GET["thm"]) : sha1($_GET["dir"] . $_GET["thm"]);
+	$scale = (int)($_GET['scale'] ?? 1);
+	if ($scale > 1) {
+		$file .= "@${scale}x";
+	}
 	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . ".jpg")) {
 		// Thumbnail cache exists, output it
 		header("Content-Type: image/jpeg");
@@ -114,21 +118,22 @@ if(!empty($_GET["thm"])) {
 		// No thumbnail cache exists, generate thumbnail
 		if(strpos($_GET["thm"], "../") === false && is_file($dir . "/" . $_GET["thm"])) {
 			$src = $dir . "/" . $_GET["thm"];
-			mkthumb($src, $config);
+			mkthumb($src, $config, $scale);
 		}
 	}
 
 	// All done.
-	exit();
-
+	exit;
 }
 
 /**
  * Generate and optionally save a thumbnail image
- * @param  string $src
- * @param  array  $config
  */
-function mkthumb($src, array $config) {
+function mkthumb(string $src, array $config, int $scale = 1)
+{
+	if ($scale > 3) {
+		throw new Exception('Invalid thumbnail scale');
+	}
 
 	// Load image file, create canvas for new image, and fill it with white
 	$img = @imagecreatefromstring(file_get_contents($config["base_directory"] . "/" . $src));
@@ -136,7 +141,8 @@ function mkthumb($src, array $config) {
 		return false;
 	}
 
-	$res = imagecreatetruecolor($config["thumbnails"]["size"], $config["thumbnails"]["size"]);
+	$size = $config["thumbnails"]["size"] * $scale;
+	$res = imagecreatetruecolor($size, $size);
 	$w = imagecolorallocate($res, 255, 255, 255);
 	imagefill($res, 0, 0, $w);
 
@@ -148,7 +154,7 @@ function mkthumb($src, array $config) {
 		$res, $img,
 		0, 0,
 		(imagesx($img) - $d) / 2, (imagesy($img) - $d) / 2,
-		$config["thumbnails"]["size"], $config["thumbnails"]["size"],
+		$size, $size,
 		$d, $d
 	);
 
@@ -157,6 +163,9 @@ function mkthumb($src, array $config) {
 	if($config["thumbnails"]["cache"]) {
 		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
 		$file = empty($_GET["dir"]) ? sha1($_GET["thm"]) : sha1($_GET["dir"] . $_GET["thm"]);
+		if ($scale > 1) {
+			$file .= "@{$scale}x";
+		}
 		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
 
 		header("Content-Type: image/jpeg");
@@ -192,6 +201,10 @@ if(!empty($_GET["dirthm"])) {
 
 	// Output thumbnail
 	$file = sha1($dir . "/" . $_GET["dirthm"]);
+	$scale = (int)($_GET['scale'] ?? 1);
+	if ($scale > 1) {
+		$file .= "@${scale}x";
+	}
 	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . ".jpg")) {
 		// Thumbnail cache exists, output it
 		header("Content-Type: image/jpeg");
@@ -200,21 +213,22 @@ if(!empty($_GET["dirthm"])) {
 		// No thumbnail cache exists, generate thumbnail
 		if(strpos($_GET["dirthm"], "../") === false && is_dir($dir . "/" . $_GET["dirthm"])) {
 			$src = $dir . "/" . $_GET["dirthm"];
-			mkdirthumb($src, $config);
+			mkdirthumb($src, $config, $scale);
 		}
 	}
 
 	// All done.
-	exit();
-
+	exit;
 }
 
 /**
  * Generate and optionally save a thumbnail image
- * @param  string $src
- * @param  array  $config
  */
-function mkdirthumb($src, array $config) {
+function mkdirthumb($src, array $config, int $scale)
+{
+	if ($scale > 3) {
+		throw new Exception('Invalid thumbnail scale');
+	}
 
 	// Find up to 4 image files in directory
 	$images = array();
@@ -232,7 +246,8 @@ function mkdirthumb($src, array $config) {
 	closedir($dh);
 
 	// Create canvas for new image, and fill it with white
-	$res = imagecreatetruecolor($config["thumbnails"]["size"], $config["thumbnails"]["size"]);
+	$size = $config["thumbnails"]["size"];
+	$res = imagecreatetruecolor($size, $size);
 	$w = imagecolorallocate($res, 255, 255, 255);
 	imagefill($res, 0, 0, $w);
 
@@ -247,9 +262,9 @@ function mkdirthumb($src, array $config) {
 		// Crop, resize, and copy from source image
 		imagecopyresampled(
 			$res, $img,
-			($i % 2) * $config["thumbnails"]["size"] / 2, intval($i >= 2) * $config["thumbnails"]["size"] / 2,
+			($i % 2) * $size / 2, intval($i >= 2) * $size / 2,
 			(imagesx($img) - $d) / 2, (imagesy($img) - $d) / 2,
-			$config["thumbnails"]["size"] / 2, $config["thumbnails"]["size"] / 2,
+			$size / 2, $size / 2,
 			$d, $d
 		);
 
@@ -260,6 +275,9 @@ function mkdirthumb($src, array $config) {
 	if($config["thumbnails"]["cache"]) {
 		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
 		$file = sha1($src);
+		if ($scale > 1) {
+			$file .= "@${scale}x";
+		}
 		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
 
 		header("Content-Type: image/jpeg");
@@ -334,7 +352,7 @@ sort($files);
 		padding: 0;
 	}
 	body {
-		font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+		font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 		font-size: 14px;
 		line-height: 1.42857;
 		color: #333;
@@ -398,8 +416,12 @@ sort($files);
 		display: block;
 		max-width: 100%;
 		height: auto;
+		transition: filter 0.2s ease;
 	}
-	a:hover img, a:focus img {opacity: 0.92;}
+	a:hover img,
+	a:focus img {
+		filter: brightness(1.1);
+	}
 	a span {
 		position: absolute;
 		bottom: 0;
@@ -410,19 +432,19 @@ sort($files);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		background: #000;
 		background: rgba(0, 0, 0, .5);
 		color: #fff;
+		-webkit-backdrop-filter: blur(30px);
+		backdrop-filter: blur(30px);
 	}
 	<?php if($config["interface"]["labels_only_on_hover"]) { ?>
 		a.image span {
 			opacity: 0;
-			transition: opacity .3s ease-out;
+			transition: opacity 0.2s ease;
 		}
 		a.image:hover span,
 		a.image:focus span {
 			opacity: 1;
-			transition: none;
 		}
 	<?php } ?>
 
@@ -447,8 +469,11 @@ sort($files);
 		a.file {background-size: 32px 39px;}
 	}
 </style>
-<?php if(!empty($config["interface"]["dark"])) { ?>
+<?php if(@$config["interface"]["dark"]) { ?>
 <style type="text/css">
+<?php if ($config["interface"]["dark"] == 'auto'): ?>
+@media only screen and (prefers-color-scheme: dark) {
+<?php endif; ?>
 	body {
 		background: #111;
 		color: #ccc;
@@ -460,6 +485,9 @@ sort($files);
 	a.dir:hover, a.dir:focus, a.image:hover, a.image:focus, a.file:hover, a.file:focus {
 		outline-color: #444;
 	}
+<?php if ($config["interface"]["dark"] == 'auto'): ?>
+}
+<?php endif; ?>
 </style>
 <?php } ?>
 </head>
@@ -487,14 +515,20 @@ sort($files);
 
 		<?php foreach($directories as $d) { ?>
 			<a class="dir" href="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir . "/" . $d); ?>" title="<?php echo $d; ?>">
-				<img src="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;dirthm=<?php echo urlencode($d); ?>">
+				<img src="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;dirthm=<?php echo urlencode($d); ?>"
+					srcset="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;dirthm=<?php echo urlencode($d); ?>&amp;scale=2 2x"
+					width="<?php echo $config['thumbnails']['size']; ?>"
+					height="<?php echo $config['thumbnails']['size']; ?>">
 				<span><?php echo $d; ?></span>
 			</a>
 		<?php } ?>
 
 		<?php foreach($images as $i) { ?>
 			<a class="image" href="<?php echo $dir . "/" . $i; ?>" title="<?php echo $i; ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
-				<img src="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;thm=<?php echo urlencode($i); ?>">
+				<img src="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;thm=<?php echo urlencode($i); ?>"
+					srcset="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;thm=<?php echo urlencode($i); ?>&amp;scale=2 2x"
+					width="<?php echo $config['thumbnails']['size']; ?>"
+					height="<?php echo $config['thumbnails']['size']; ?>">
 				<?php if($config["interface"]["labels"]) { ?>
 					<span><?php echo $i; ?></span>
 				<?php } ?>
