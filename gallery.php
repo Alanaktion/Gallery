@@ -135,7 +135,7 @@ function mkthumb(string $src, array $config, int $scale = 1)
 		throw new Exception('Invalid thumbnail scale');
 	}
 
-	// Load image file, create canvas for new image, and fill it with white
+	// Load image file, create canvas for new image, and fill it with gray
 	$img = @imagecreatefromstring(file_get_contents($config["base_directory"] . "/" . $src));
 	if(!$img) {
 		return false;
@@ -143,7 +143,7 @@ function mkthumb(string $src, array $config, int $scale = 1)
 
 	$size = $config["thumbnails"]["size"] * $scale;
 	$res = imagecreatetruecolor($size, $size);
-	$w = imagecolorallocate($res, 255, 255, 255);
+	$w = imagecolorallocate($res, 64, 64, 64);
 	imagefill($res, 0, 0, $w);
 
 	// Get smaller of image's dimensions
@@ -245,10 +245,10 @@ function mkdirthumb($src, array $config, int $scale)
 	}
 	closedir($dh);
 
-	// Create canvas for new image, and fill it with white
+	// Create canvas for new image, and fill it with gray
 	$size = $config["thumbnails"]["size"];
 	$res = imagecreatetruecolor($size, $size);
-	$w = imagecolorallocate($res, 255, 255, 255);
+	$w = imagecolorallocate($res, 64, 64, 64);
 	imagefill($res, 0, 0, $w);
 
 	// Add images to thumbnail
@@ -333,6 +333,13 @@ if(IS_WIN) {
 			unset($files[$key]);
 		}
 	}
+}
+
+function e($str) {
+	return htmlspecialchars($str, ENT_QUOTES);
+}
+function u($str) {
+	return e(urlencode($str));
 }
 
 sort($images);
@@ -494,7 +501,7 @@ sort($files);
 <body>
 	<div class="container">
 		<?php if($dir_level) { ?>
-			<p class="breadcrumbs"><a href="<?php echo $self; ?>"><?php echo $config["title"]; ?></a> /
+			<p class="breadcrumbs"><a href="<?= e($self) ?>"><?= e($config["title"]) ?></a> /
 				<?php
 				$levels = explode("/", $current_dir);
 				$i = 0;
@@ -506,7 +513,7 @@ sort($files);
 						$link_dir = dirname($link_dir);
 					}
 				?>
-					<a href="<?php echo $self; ?>?dir=<?php echo urlencode($link_dir); ?>"><?php echo $lvl; ?></a> /
+					<a href="<?= e($self) ?>?dir=<?= u($link_dir) ?>"><?= e($lvl) ?></a> /
 				<?php
 				}
 				?>
@@ -514,30 +521,30 @@ sort($files);
 		<?php } ?>
 
 		<?php foreach($directories as $d) { ?>
-			<a class="dir" href="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir . "/" . $d); ?>" title="<?php echo $d; ?>">
-				<img src="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;dirthm=<?php echo urlencode($d); ?>"
-					srcset="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;dirthm=<?php echo urlencode($d); ?>&amp;scale=2 2x"
-					width="<?php echo $config['thumbnails']['size']; ?>"
-					height="<?php echo $config['thumbnails']['size']; ?>">
-				<span><?php echo $d; ?></span>
+			<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
+				<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>"
+					srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>&amp;scale=2 2x"
+					width="<?= $config['thumbnails']['size'] ?>"
+					height="<?= $config['thumbnails']['size'] ?>">
+				<span><?= e($d) ?></span>
 			</a>
 		<?php } ?>
 
 		<?php foreach($images as $i) { ?>
-			<a class="image" href="<?php echo $dir . "/" . $i; ?>" title="<?php echo $i; ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
-				<img src="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;thm=<?php echo urlencode($i); ?>"
-					srcset="<?php echo $self; ?>?dir=<?php echo urlencode($current_dir); ?>&amp;thm=<?php echo urlencode($i); ?>&amp;scale=2 2x"
-					width="<?php echo $config['thumbnails']['size']; ?>"
-					height="<?php echo $config['thumbnails']['size']; ?>">
+			<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+				<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>"
+					srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>&amp;scale=2 2x"
+					width="<?= $config['thumbnails']['size'] ?>"
+					height="<?= $config['thumbnails']['size'] ?>">
 				<?php if($config["interface"]["labels"]) { ?>
-					<span><?php echo $i; ?></span>
+					<span><?= e($i) ?></span>
 				<?php } ?>
 			</a>
 		<?php } ?>
 
 		<?php foreach($files as $f) { ?>
-			<a class="file" href="<?php echo $dir . "/" . $f; ?>" title="<?php echo $f; ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
-				<span><?php echo $f; ?></span>
+			<a class="file" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($f)) ?>" title="<?= e($f) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+				<span><?= e($f) ?></span>
 			</a>
 		<?php } ?>
 
