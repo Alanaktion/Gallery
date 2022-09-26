@@ -478,7 +478,7 @@ sort($files);
 </style>
 <?php if(@$config["interface"]["dark"]) { ?>
 <style type="text/css">
-<?php if ($config["interface"]["dark"] == 'auto'): ?>
+<?php if ($config["interface"]["dark"] === 'auto'): ?>
 @media only screen and (prefers-color-scheme: dark) {
 <?php endif; ?>
 	body {
@@ -492,7 +492,7 @@ sort($files);
 	a.dir:hover, a.dir:focus, a.image:hover, a.image:focus, a.file:hover, a.file:focus {
 		outline-color: #444;
 	}
-<?php if ($config["interface"]["dark"] == 'auto'): ?>
+<?php if ($config["interface"]["dark"] === 'auto'): ?>
 }
 <?php endif; ?>
 </style>
