@@ -32,6 +32,7 @@ $config = array(
 		"png",
 		"gif",
 		"bmp",
+		"webp",
 	),
 
 	"file_extensions" => array(
