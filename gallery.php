@@ -343,8 +343,8 @@ function u($str) {
 	return e(urlencode($str));
 }
 
-sort($images);
-sort($files);
+natsort($images);
+natsort($files);
 
 ?>
 <!doctype html>
@@ -360,7 +360,7 @@ sort($files);
 		padding: 0;
 	}
 	body {
-		font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+		font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 		font-size: 14px;
 		line-height: 1.42857;
 		color: #333;
