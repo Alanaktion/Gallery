@@ -109,7 +109,7 @@ if(!empty($_GET["thm"])) {
 	$file = empty($_GET["dir"]) ? sha1($_GET["thm"]) : sha1($_GET["dir"] . $_GET["thm"]);
 	$scale = (int)($_GET['scale'] ?? 1);
 	if ($scale > 1) {
-		$file .= "@${scale}x";
+		$file .= "@{$scale}x";
 	}
 	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . ".jpg")) {
 		// Thumbnail cache exists, output it
@@ -204,7 +204,7 @@ if(!empty($_GET["dirthm"])) {
 	$file = sha1($dir . "/" . $_GET["dirthm"]);
 	$scale = (int)($_GET['scale'] ?? 1);
 	if ($scale > 1) {
-		$file .= "@${scale}x";
+		$file .= "@{$scale}x";
 	}
 	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . ".jpg")) {
 		// Thumbnail cache exists, output it
@@ -277,7 +277,7 @@ function mkdirthumb($src, array $config, int $scale)
 		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
 		$file = sha1($src);
 		if ($scale > 1) {
-			$file .= "@${scale}x";
+			$file .= "@{$scale}x";
 		}
 		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
 
@@ -468,13 +468,34 @@ natsort($files);
 <?php $c = 3; ?>
 <?php while(($config["thumbnails"]["size"] + 6) * $c++ < 3400) { ?>
 	@media only screen and (min-width: <?php echo ($config["thumbnails"]["size"] + 6) * $c; ?>px) {
-		.container{max-width: <?php echo ($config["thumbnails"]["size"] + 6) * $c; ?>px}
+		.container{
+			max-width: <?php echo ($config["thumbnails"]["size"] + 6) * $c; ?>px;
+		}
 	}
 <?php } ?>
 	@media only screen and (max-width: <?php echo ($config["thumbnails"]["size"] + 6) * 4; ?>px) {
-		.container{max-width: none !important;}
-		a.dir, a.image, a.file {width: <?php echo $config["thumbnails"]["size"] / 2; ?>px; height: <?php echo $config["thumbnails"]["size"] / 2; ?>px;}
-		a.file {background-size: 32px 39px;}
+		.container {
+			max-width: none !important;
+		}
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(<?php echo ($config["thumbnails"]["size"] / 2) + 6; ?>px, 1fr));
+			gap: 2px;
+		}
+		a.dir,
+		a.image,
+		a.file {
+			float: none;
+			width: 100%;
+			height: auto;
+			aspect-ratio: 1/1;
+			margin: 0;
+			border: none;
+			outline: none;
+		}
+		a.file {
+			background-size: 32px 39px;
+		}
 	}
 </style>
 <?php if(@$config["interface"]["dark"]) { ?>
@@ -521,33 +542,35 @@ natsort($files);
 			</a></p>
 		<?php } ?>
 
-		<?php foreach($directories as $d) { ?>
-			<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
-				<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>"
-					srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>&amp;scale=2 2x"
-					width="<?= $config['thumbnails']['size'] ?>"
-					height="<?= $config['thumbnails']['size'] ?>">
-				<span><?= e($d) ?></span>
-			</a>
-		<?php } ?>
+		<div class="grid">
+			<?php foreach($directories as $d) { ?>
+				<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
+					<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>"
+						srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>&amp;scale=2 2x"
+						width="<?= $config['thumbnails']['size'] ?>"
+						height="<?= $config['thumbnails']['size'] ?>">
+					<span><?= e($d) ?></span>
+				</a>
+			<?php } ?>
 
-		<?php foreach($images as $i) { ?>
-			<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
-				<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>"
-					srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>&amp;scale=2 2x"
-					width="<?= $config['thumbnails']['size'] ?>"
-					height="<?= $config['thumbnails']['size'] ?>">
-				<?php if($config["interface"]["labels"]) { ?>
-					<span><?= e($i) ?></span>
-				<?php } ?>
-			</a>
-		<?php } ?>
+			<?php foreach($images as $i) { ?>
+				<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+					<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>"
+						srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>&amp;scale=2 2x"
+						width="<?= $config['thumbnails']['size'] ?>"
+						height="<?= $config['thumbnails']['size'] ?>">
+					<?php if($config["interface"]["labels"]) { ?>
+						<span><?= e($i) ?></span>
+					<?php } ?>
+				</a>
+			<?php } ?>
 
-		<?php foreach($files as $f) { ?>
-			<a class="file" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($f)) ?>" title="<?= e($f) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
-				<span><?= e($f) ?></span>
-			</a>
-		<?php } ?>
+			<?php foreach($files as $f) { ?>
+				<a class="file" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($f)) ?>" title="<?= e($f) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+					<span><?= e($f) ?></span>
+				</a>
+			<?php } ?>
+		</div>
 
 		<div class="clear"></div>
 		<footer><?php echo count($directories) + count($images) + count($files); ?> items</footer>
