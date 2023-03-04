@@ -1,6 +1,6 @@
 <?php
 /**
- * Gallery 0.6.1
+ * Gallery 0.6.2
  * The ultimate single-file photo gallery
  * @author Alan Hardman <alan@phpizza.com>
  */
@@ -19,6 +19,7 @@
 $config = array(
 
 	"title" => "Gallery",
+	"directory_title" => true, // Prepend subdirectory name to page title
 
 	"directory" => "./", // Must include trailing slash
 
@@ -346,12 +347,17 @@ function u($str) {
 natsort($images);
 natsort($files);
 
+$title = $config["title"];
+if ($current_dir) {
+	$title = basename($dir) . " - " . $config["title"];
+}
+
 ?>
 <!doctype html>
 <html>
 <head>
 	<meta charset="utf-8">
-	<title><?php echo $config["title"]; ?></title>
+	<title><?php echo $title; ?></title>
 	<meta name="viewport" content="width=device-width,maximum-scale=1">
 	<style type="text/css">
 	html, body {
