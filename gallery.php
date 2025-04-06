@@ -40,6 +40,10 @@ $config = array(
 		"txt",
 		"zip",
 		"rar",
+		"7z",
+		"heic",
+		"heif",
+		"svg",
 	),
 
 	"interface" => array(
@@ -55,6 +59,10 @@ $config = array(
 	)
 
 );
+
+if (function_exists('imagecreatefromavif')) {
+	$config["image_extensions"][] = "avif";
+}
 
 // Include user configuration file if it exists
 if(is_file("gallery-config.php")) {
@@ -516,9 +524,13 @@ if ($current_dir) {
 	a.dir, a.image, a.file {
 		border-color: #000;
 		outline-color: #222;
+		background-color: #222;
 	}
 	a.dir:hover, a.dir:focus, a.image:hover, a.image:focus, a.file:hover, a.file:focus {
 		outline-color: #444;
+	}
+	a.dir:focus, a.dir:hover {
+		background-color: #333;
 	}
 <?php if ($config["interface"]["dark"] === 'auto'): ?>
 }
@@ -545,7 +557,7 @@ if ($current_dir) {
 				<?php
 				}
 				?>
-			</a></p>
+			</p>
 		<?php } ?>
 
 		<div class="grid">
@@ -553,6 +565,7 @@ if ($current_dir) {
 				<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
 					<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>"
 						srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>&amp;scale=2 2x"
+						loading="lazy" decoding="async"
 						width="<?= $config['thumbnails']['size'] ?>"
 						height="<?= $config['thumbnails']['size'] ?>">
 					<span><?= e($d) ?></span>
@@ -563,6 +576,7 @@ if ($current_dir) {
 				<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
 					<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>"
 						srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>&amp;scale=2 2x"
+						loading="lazy" decoding="async"
 						width="<?= $config['thumbnails']['size'] ?>"
 						height="<?= $config['thumbnails']['size'] ?>">
 					<?php if($config["interface"]["labels"]) { ?>

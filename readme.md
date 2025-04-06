@@ -1,12 +1,38 @@
 ## Gallery
 
-The ultimate single-file PHP photo gallery
+The ultimate single-file photo gallery
 
-Simply put the gallery.php file in any folder and it will display a gallery formatted to fit any screen, with some simple configurable options in the file.  You can also rename the file to whatever you desire, it will work as an index.php file.
+### PHP
+
+Simply put the gallery.php file in any folder and it will display a gallery formatted to fit any screen, with some simple configurable options in the file. You can also rename the file to whatever you desire, it will work as an index.php file.
 
 This application requires the GD library for generation of thumbnails.
 
+### Python
+
+Run the `gallery.py` file with Python. Use `-d` to specify a directory other than cwd to list images from, `-p` to specify which TCP port to listen on.
+
+```bash
+python3 gallery.py -d ~/Pictures/
+```
+
+This application requires the Pillow library to be installed:
+
+```bash
+pip3 install Pillow
+```
+
+Create a `config.ini` file in the cwd to customize the gallery features. See [config-sample.ini](config-sample.ini) for the defaults.
+
 ### Changelog
+
+0.7.0
+
+- Lazy-load thumbnail images
+- AVIF image handling (where supported)
+- List 7z, SVG, and other common files by default
+- Python implementation
+- Dark theme improvements
 
 0.6.1
 
@@ -67,6 +93,3 @@ This application requires the GD library for generation of thumbnails.
 0.1
 
 - First release
-
-### Live demo
-https://phpizza.com/~alan/gallery/
