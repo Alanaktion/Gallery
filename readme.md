@@ -22,9 +22,33 @@ This application requires the Pillow library to be installed:
 pip3 install Pillow
 ```
 
-Create a `config.ini` file in the cwd to customize the gallery features. See [config-sample.ini](config-sample.ini) for the defaults.
+Set environment variables or create a `.env` file in the cwd to customize the gallery features. See [.env.example](.env.example) for the defaults.
+
+#### Docker
+
+The Python implementation is also available as a Docker container. By default, the gallery lists images from `/gallery` in the container. You can use environment variables to configure the gallery in the same way as when running directly.
+
+Here's an example Compose spec for using it:
+
+```yml
+services:
+  gallery:
+    image: ghcr.io/alanaktion/gallery:latest
+    environment:
+      - GALLERY_TITLE=Gallery
+    ports:
+      - 8000:8000
+    volumes:
+      - /home/user/Pictures:/gallery
+```
 
 ### Changelog
+
+0.8.0
+
+- FFmpeg support for video thumbnails
+- Use environment variables for Python implementation
+- Container support
 
 0.7.0
 

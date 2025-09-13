@@ -480,7 +480,7 @@ if ($current_dir) {
 
 	/* Grid breakpoints */
 <?php $c = 3; ?>
-<?php while(($config["thumbnails"]["size"] + 6) * $c++ < 3400) { ?>
+<?php while(($config["thumbnails"]["size"] + 6) * $c++ <= 3840) { ?>
 	@media only screen and (min-width: <?php echo ($config["thumbnails"]["size"] + 6) * $c; ?>px) {
 		.container{
 			max-width: <?php echo ($config["thumbnails"]["size"] + 6) * $c; ?>px;

@@ -1,21 +1,37 @@
 import argparse
-import configparser
 import hashlib
 import http.server
 import io
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import PIL.Image
 import urllib.parse
 
+from dotenv import load_dotenv
 from html import escape as esc
+
+load_dotenv()
+
+ffmpeg = os.environ.get('FFMPEG_PATH', shutil.which('ffmpeg'))
+
+
+_BOOLEAN_STATES = {'1': True, 'yes': True, 'true': True, 'on': True,
+                   '0': False, 'no': False, 'false': False, 'off': False}
+
+def _env_bool(value: str):
+    if value.lower() not in _BOOLEAN_STATES:
+        return value
+    return _BOOLEAN_STATES[value.lower()]
 
 
 def qe(val: str):
     return esc(urllib.parse.quote(val))
 
 
-def css(config: configparser.ConfigParser):
+def css():
     styles = """
 html, body {
     height: 100%;
@@ -119,10 +135,10 @@ footer {
 .clear {clear: both;}
 """
 
-    size = config.getint('thumbnails', 'size', fallback=200)
+    size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
     styles = styles.replace('{SIZE}', str(size))
 
-    if config.getboolean('interface', 'labels_only_on_hover', fallback=True):
+    if _env_bool(os.environ.get('GALLERY_LABELS_ONLY_ON_HOVER', 'true')):
         styles += """
 a.image span {
     opacity: 0;
@@ -135,7 +151,7 @@ a.image:focus span {
 """
 
     c = 3
-    while (size + 6) * c < 3400:
+    while (size + 6) * c <= 3840:
         styles += """
 @media only screen and (min-width: {COL}px) {
     .container{
@@ -171,9 +187,9 @@ a.image:focus span {
     }
 }""".replace('{MW}', str((size + 6) * 4)).replace('{CW}', str((size / 2) + 6))
 
-    dark = config.get('interface', 'dark', fallback='auto')
+    dark = os.environ.get('GALLERY_DARK_THEME', 'auto')
     if dark != 'auto':
-        dark = config.getboolean('interface', 'dark', fallback='auto')
+        dark = _env_bool(dark)
     if dark:
         if dark == 'auto':
             styles += "@media only screen and (prefers-color-scheme: dark) {"
@@ -229,14 +245,41 @@ def cropped_thumbnail(img: PIL.Image.Image, size):
     return result
 
 
+def ffmpeg_thumb(src: str):
+    sha1 = hashlib.sha1(src.encode()).hexdigest()
+    if _env_bool(os.environ.get('THUMBNAIL_CACHE', 'true')):
+        root = os.path.join(os.path.expanduser(os.environ.get('GALLERY_DIRECTORY', '.')), '.thm')
+        os.makedirs(root, exist_ok=True)
+    else:
+        root = tempfile.gettempdir()
+    outfile = os.path.join(root, f'{sha1}_ffmpeg.webp')
+    if os.path.exists(outfile):
+        return outfile
+    cmd = [
+        'ffmpeg',
+        '-i', src,
+        '-ss', '0',
+        '-t', '5',
+        '-vf', 'fps=1/1',
+        '-q:v', '75',
+        '-f', 'webp',
+        outfile
+    ]
+    subprocess.run(cmd, check=True)
+    return outfile
+
+
 class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, config: configparser.ConfigParser|None=None, **kwargs):
-        if not config:
-            config = configparser.ConfigParser()
-        self.config = config
-        self.title = config.get(configparser.UNNAMED_SECTION, 'title', fallback='Gallery')
-        self.image_exts = config.get(configparser.UNNAMED_SECTION, 'image_extensions', fallback='jpg,jpeg,jpe,jfif,png,gif,bmp,webp').split(',')
-        self.file_exts = config.get(configparser.UNNAMED_SECTION, 'file_extensions', fallback='txt,zip,rar,7z,heif,heic,svg').split(',')
+    def __init__(self, *args, **kwargs):
+        self.title = os.environ.get('GALLERY_TITLE', 'Gallery')
+        img_exts = 'jpg,jpeg,jpe,jfif,png,gif,bmp,webp'
+        file_exts = 'txt,zip,rar,7z,heif,heic,svg,m4a,mp3,ogg'
+        if ffmpeg:
+            img_exts += ',mp4,m4v,webm'
+        else:
+            file_exts += ',mp4,m4v,webm'
+        self.image_exts = os.environ.get('IMAGE_EXTS', img_exts).split(',')
+        self.file_exts = os.environ.get('FILE_EXTS', file_exts).split(',')
         super().__init__(*args, **kwargs)
 
     def do_GET(self):
@@ -295,7 +338,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     <title>{esc(self.title)}</title>
     <meta name="viewport" content="width=device-width,maximum-scale=1">
     <style type="text/css">
-    {css(self.config)}
+    {css()}
     </style>
 </head>
 <body>
@@ -347,7 +390,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         src = path.replace('/.thm', '')
         sha1 = hashlib.sha1(src.encode()).hexdigest()
         suffix = ''
-        size = self.config.getint('thumbnails', 'size', fallback=200)
+        size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
         url = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(url.query)
         if qs.get('scale'):
@@ -356,7 +399,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             size *= scale
         cachefn = f'.thm/{sha1}{suffix}.webp'
 
-        do_cache = self.config.getboolean('thumbnails', 'cache', fallback=True)
+        do_cache = _env_bool(os.environ.get('THUMBNAIL_CACHE', 'true'))
 
         try:
             if do_cache:
@@ -369,7 +412,12 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                     if os.path.isdir(src):
                         self.save_dir_thumb(src, cacheabs, size)
                     else:
-                        thm = PIL.Image.open(src)
+                        if path.endswith(('.mp4', '.m4v', '.webm')):
+                            vimg = ffmpeg_thumb(src)
+                            thm = PIL.Image.open(vimg)
+                            os.unlink(vimg)
+                        else:
+                            thm = PIL.Image.open(src)
                         thm = cropped_thumbnail(thm, (size, size))
                         thm.save(cacheabs, 'webp', quality=70)
 
@@ -381,7 +429,12 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if os.path.isdir(src):
                     self.save_dir_thumb(src, target, size)
                 else:
-                    thm = PIL.Image.open(src)
+                    if path.endswith(('.mp4', '.m4v', '.webm')):
+                        vimg = ffmpeg_thumb(src)
+                        thm = PIL.Image.open(vimg)
+                        os.unlink(vimg)
+                    else:
+                        thm = PIL.Image.open(src)
                     thm = cropped_thumbnail(thm, (size, size))
                     thm.save(target, 'webp', quality=70)
 
@@ -400,6 +453,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     def save_dir_thumb(self, directory: str, outfile, size: int):
         thm = PIL.Image.new('RGBA', (size, size), (0, 0, 0, 0))
         _, images, _ = self._read_dir(directory)
+        # TODO: iterate through all images, skipping unsupported files (videos+), up to 4 supported files
         for i in range(min(4, len(images))):
             img = images[i]
             sub = PIL.Image.open(img.path)
@@ -410,35 +464,33 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         thm.save(outfile, 'webp', quality=70)
 
 
-def config_read(file):
-    config = configparser.ConfigParser(allow_unnamed_section=True)
-    try:
-        config.read(file)
-        return config
-    except FileNotFoundError:
-        return config
-
-
-def build_parser():
+def args_to_env():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--address', default='127.0.0.1')
-    parser.add_argument('-p', '--port', type=int, default=8000)
-    parser.add_argument('-d', '--directory', default='.')
-    return parser
+    parser.add_argument('--address')
+    parser.add_argument('-p', '--port', type=int)
+    parser.add_argument('-d', '--directory')
+
+    args = parser.parse_args()
+    if args.address:
+        os.environ['GALLERY_HOST'] = args.address
+    if args.port:
+        os.environ['GALLERY_PORT'] = str(args.port)
+    if args.directory:
+        os.environ['GALLERY_DIRECTORY'] = args.directory
 
 
 def main():
-    config = config_read('config.ini')
-    args = build_parser().parse_args()
-
-    directory = os.path.expanduser(args.directory)
+    args_to_env()
+    directory = os.path.expanduser(os.environ.get('GALLERY_DIRECTORY', '.'))
 
     class GalleryServer(http.server.ThreadingHTTPServer):
         def finish_request(self, request, client_address):
-            GalleryRequestHandler(request, client_address, self, config=config,
+            GalleryRequestHandler(request, client_address, self,
                                   directory=directory)
 
-    with GalleryServer((args.address, args.port), GalleryRequestHandler) as httpd:
+    host = os.environ.get('GALLERY_HOST', '127.0.0.1')
+    port = int(os.environ.get('GALLERY_PORT', '8000'))
+    with GalleryServer((host, port), GalleryRequestHandler) as httpd:
         host, port = httpd.socket.getsockname()[:2]
         url_host = f'[{host}]' if ':' in host else host
         print(
