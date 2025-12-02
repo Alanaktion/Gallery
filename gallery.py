@@ -10,10 +10,12 @@ import tempfile
 import PIL.Image
 import urllib.parse
 
-from dotenv import load_dotenv
 from html import escape as esc
-
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 ffmpeg = os.environ.get('FFMPEG_PATH', shutil.which('ffmpeg'))
 
@@ -231,6 +233,20 @@ def sorteddir(entries: list[os.DirEntry], natural: bool = True):
         return sorted(entries, key=lambda entry: entry.name)
 
 
+def thumb_dir():
+    if not _env_bool(os.environ.get('THUMBNAIL_CACHE', 'true')):
+        return None
+
+    thumbdir = os.environ.get('THUMBNAIL_DIRECTORY')
+    if thumbdir:
+        root = os.path.expanduser(thumbdir)
+        return root
+    else:
+        root = os.path.join(os.path.expanduser(os.environ.get('GALLERY_DIRECTORY', '.')), '.thm')
+        os.makedirs(root, exist_ok=True)
+        return '.thm'
+
+
 def cropped_thumbnail(img: PIL.Image.Image, size):
     width, height = img.size
     smaller_side = min(width, height)
@@ -247,11 +263,7 @@ def cropped_thumbnail(img: PIL.Image.Image, size):
 
 def ffmpeg_thumb(src: str):
     sha1 = hashlib.sha1(src.encode()).hexdigest()
-    if _env_bool(os.environ.get('THUMBNAIL_CACHE', 'true')):
-        root = os.path.join(os.path.expanduser(os.environ.get('GALLERY_DIRECTORY', '.')), '.thm')
-        os.makedirs(root, exist_ok=True)
-    else:
-        root = tempfile.gettempdir()
+    root = thumb_dir() or tempfile.gettempdir()
     outfile = os.path.join(root, f'{sha1}_ffmpeg.webp')
     if os.path.exists(outfile):
         return outfile
@@ -397,16 +409,12 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             scale = int(qs.get('scale', [0])[0])
             suffix = f'@{scale}x'
             size *= scale
-        cachefn = f'.thm/{sha1}{suffix}.webp'
 
-        do_cache = _env_bool(os.environ.get('THUMBNAIL_CACHE', 'true'))
-
+        cachedir = thumb_dir()
         try:
-            if do_cache:
-                cacheabs = self.translate_path(cachefn)
-                cachedir = self.translate_path('.thm/')
-                if not os.path.isdir(cachedir):
-                    os.makedirs(cachedir, exist_ok=True)
+            if cachedir:
+                cachefn = f'{sha1}{suffix}.webp'
+                cacheabs = os.path.abspath(f'{cachedir}/{cachefn}')
 
                 if not os.path.isfile(cacheabs):
                     if os.path.isdir(src):
@@ -421,8 +429,11 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                         thm = cropped_thumbnail(thm, (size, size))
                         thm.save(cacheabs, 'webp', quality=70)
 
-                self.path = cachefn
-                return super().do_GET()
+                if cachedir == '.thm':
+                    self.path = f'.thm/{cachefn}'
+                    return super().do_GET()
+                else:
+                    target = open(cacheabs, 'rb')
 
             else:
                 target = io.BytesIO()
@@ -439,7 +450,8 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                     thm.save(target, 'webp', quality=70)
 
             self.send_response(200)
-            self.send_header('Content-type', 'image/webp')
+            self.send_header('Content-Type', 'image/webp')
+            self.send_header('Cache-Control', 'max-age=86400')
             self.end_headers()
             try:
                 target.seek(0)
@@ -453,14 +465,19 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     def save_dir_thumb(self, directory: str, outfile, size: int):
         thm = PIL.Image.new('RGBA', (size, size), (0, 0, 0, 0))
         _, images, _ = self._read_dir(directory)
-        # TODO: iterate through all images, skipping unsupported files (videos+), up to 4 supported files
-        for i in range(min(4, len(images))):
-            img = images[i]
-            sub = PIL.Image.open(img.path)
-            sub = cropped_thumbnail(sub, (size // 2, size // 2))
-            x = i % 2 * size // 2
-            y = (i // 2) * (size // 2)
-            thm.paste(sub, (x, y))
+        count = 0
+        for img in images:
+            if count >= 4:
+                break
+            try:
+                sub = PIL.Image.open(img.path)
+                sub = cropped_thumbnail(sub, (size // 2, size // 2))
+                x = count % 2 * size // 2
+                y = (count // 2) * (size // 2)
+                thm.paste(sub, (x, y))
+                count += 1
+            except PIL.UnidentifiedImageError:
+                pass
         thm.save(outfile, 'webp', quality=70)
 
 

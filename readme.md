@@ -1,14 +1,14 @@
-## Gallery
+# Gallery
 
 The ultimate single-file photo gallery
 
-### PHP
+## PHP
 
 Simply put the gallery.php file in any folder and it will display a gallery formatted to fit any screen, with some simple configurable options in the file. You can also rename the file to whatever you desire, it will work as an index.php file.
 
 This application requires the GD library for generation of thumbnails.
 
-### Python
+## Python
 
 Run the `gallery.py` file with Python. Use `-d` to specify a directory other than cwd to list images from, `-p` to specify which TCP port to listen on.
 
@@ -24,7 +24,7 @@ pip3 install Pillow
 
 Set environment variables or create a `.env` file in the cwd to customize the gallery features. See [.env.example](.env.example) for the defaults.
 
-#### Docker
+### Docker
 
 The Python implementation is also available as a Docker container. By default, the gallery lists images from `/gallery` in the container. You can use environment variables to configure the gallery in the same way as when running directly.
 
@@ -40,6 +40,9 @@ services:
       - 8000:8000
     volumes:
       - /home/user/Pictures:/gallery
+      - cache:/thm
+volumes:
+  cache:
 ```
 
 ### Changelog

@@ -8,5 +8,8 @@ COPY gallery.py .
 ENV GALLERY_HOST=0.0.0.0
 ENV GALLERY_PORT=8000
 ENV GALLERY_DIRECTORY=/gallery
+ENV THUMBNAIL_DIRECTORY=/thm
 EXPOSE 8000
+VOLUME [ "/gallery" ]
+VOLUME [ "/thm" ]
 CMD [ "python", "./gallery.py" ]
