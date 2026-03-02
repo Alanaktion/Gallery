@@ -18,6 +18,7 @@ except ImportError:
     pass
 
 ffmpeg = os.environ.get('FFMPEG_PATH', shutil.which('ffmpeg'))
+gltf_viewer = os.environ.get('GLTF_VIEWER_PATH', shutil.which('gltf_viewer'))
 
 
 _BOOLEAN_STATES = {'1': True, 'yes': True, 'true': True, 'on': True,
@@ -281,6 +282,29 @@ def ffmpeg_thumb(src: str):
     return outfile
 
 
+def gltf_thumb(src: str):
+    sha1 = hashlib.sha1(src.encode()).hexdigest()
+    root = thumb_dir() or tempfile.gettempdir()
+    outfile = os.path.join(root, f'{sha1}_gltf.webp')
+    if os.path.exists(outfile):
+        return outfile
+    spec = '[{"name": "thumb", "base": {}}]'
+    with tempfile.TemporaryDirectory() as tmpdir:
+        spec_path = os.path.join(tmpdir, 'spec.json')
+        with open(spec_path, 'w') as f:
+            f.write(spec)
+        cmd = [gltf_viewer, f'--batch={spec_path}', '--headless', src]
+        result = subprocess.run(cmd, cwd=tmpdir, capture_output=True)
+        out_tif = os.path.join(tmpdir, 'thumb0.tif')
+        if result.returncode != 0 or not os.path.isfile(out_tif):
+            raise RuntimeError(
+                f'gltf_viewer failed (exit {result.returncode}): '
+                + result.stderr.decode('utf-8', errors='replace').strip())
+        img = PIL.Image.open(out_tif)
+        img.save(outfile, 'webp', quality=70)
+    return outfile
+
+
 class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.title = os.environ.get('GALLERY_TITLE', 'Gallery')
@@ -290,6 +314,10 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             img_exts += ',mp4,m4v,webm'
         else:
             file_exts += ',mp4,m4v,webm'
+        if gltf_viewer:
+            img_exts += ',obj,gltf,glb,stl'
+        else:
+            file_exts += ',obj,gltf,glb,stl'
         self.image_exts = os.environ.get('IMAGE_EXTS', img_exts).split(',')
         self.file_exts = os.environ.get('FILE_EXTS', file_exts).split(',')
         super().__init__(*args, **kwargs)
@@ -424,6 +452,10 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                             vimg = ffmpeg_thumb(src)
                             thm = PIL.Image.open(vimg)
                             os.unlink(vimg)
+                        elif path.lower().endswith(('.obj', '.gltf', '.glb', '.stl')):
+                            gimg = gltf_thumb(src)
+                            thm = PIL.Image.open(gimg)
+                            os.unlink(gimg)
                         else:
                             thm = PIL.Image.open(src)
                         thm = cropped_thumbnail(thm, (size, size))
@@ -444,6 +476,10 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                         vimg = ffmpeg_thumb(src)
                         thm = PIL.Image.open(vimg)
                         os.unlink(vimg)
+                    elif path.lower().endswith(('.obj', '.gltf', '.glb', '.stl')):
+                        gimg = gltf_thumb(src)
+                        thm = PIL.Image.open(gimg)
+                        os.unlink(gimg)
                     else:
                         thm = PIL.Image.open(src)
                     thm = cropped_thumbnail(thm, (size, size))
