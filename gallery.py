@@ -288,7 +288,12 @@ def gltf_thumb(src: str):
     outfile = os.path.join(root, f'{sha1}_gltf.webp')
     if os.path.exists(outfile):
         return outfile
-    spec = '[{"name": "thumb", "base": {}}]'
+    spec = ('[{"name":"thumb","base":{'
+            '"viewer.skyboxEnabled":false,'
+            '"viewer.backgroundColor":[1,1,1],'
+            '"camera.focalLength":100,'
+            '"view.colorGrading.exposure":2.0'
+            '}}]')
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = os.path.join(tmpdir, 'spec.json')
         with open(spec_path, 'w') as f:
