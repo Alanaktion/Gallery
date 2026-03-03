@@ -294,7 +294,10 @@ def gltf_thumb(src: str):
         with open(spec_path, 'w') as f:
             f.write(spec)
         cmd = [gltf_viewer, '--api=opengl', f'--batch={spec_path}', '--headless', src]
-        env = {**os.environ, 'LIBGL_ALWAYS_SOFTWARE': '1', 'EGL_PLATFORM': 'surfaceless'}
+        xvfb_run = shutil.which('xvfb-run')
+        if xvfb_run:
+            cmd = [xvfb_run, '-a'] + cmd
+        env = {**os.environ, 'LIBGL_ALWAYS_SOFTWARE': '1'}
         result = subprocess.run(cmd, cwd=tmpdir, capture_output=True, env=env)
         out_tif = os.path.join(tmpdir, 'thumb0.tif')
         if result.returncode != 0 or not os.path.isfile(out_tif):
