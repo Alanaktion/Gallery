@@ -315,7 +315,8 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             file_exts += ',mp4,m4v,webm'
         if gltf_viewer:
-            img_exts += ',obj,gltf,glb,stl'
+            img_exts += ',gltf,glb'
+            file_exts += ',obj,stl'
         else:
             file_exts += ',obj,gltf,glb,stl'
         self.image_exts = os.environ.get('IMAGE_EXTS', img_exts).split(',')
@@ -452,7 +453,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                             vimg = ffmpeg_thumb(src)
                             thm = PIL.Image.open(vimg)
                             os.unlink(vimg)
-                        elif path.lower().endswith(('.obj', '.gltf', '.glb', '.stl')):
+                        elif path.lower().endswith(('.gltf', '.glb')):
                             gimg = gltf_thumb(src)
                             thm = PIL.Image.open(gimg)
                             os.unlink(gimg)
@@ -476,7 +477,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                         vimg = ffmpeg_thumb(src)
                         thm = PIL.Image.open(vimg)
                         os.unlink(vimg)
-                    elif path.lower().endswith(('.obj', '.gltf', '.glb', '.stl')):
+                    elif path.lower().endswith(('.gltf', '.glb')):
                         gimg = gltf_thumb(src)
                         thm = PIL.Image.open(gimg)
                         os.unlink(gimg)
