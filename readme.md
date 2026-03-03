@@ -45,7 +45,29 @@ volumes:
   cache:
 ```
 
+A `gltf` Docker tag is also available that includes [Filament](https://github.com/google/filament)'s `gltf_viewer` for generating thumbnails of 3D model files (glTF, GLB, OBJ, STL):
+
+```yml
+services:
+  gallery:
+    image: ghcr.io/alanaktion/gallery:gltf
+    environment:
+      - GALLERY_TITLE=Gallery
+    ports:
+      - 8000:8000
+    volumes:
+      - /home/user/Models:/gallery
+      - cache:/thm
+volumes:
+  cache:
+```
+
 ### Changelog
+
+0.9.0
+
+- 3D model support (glTF, GLB, OBJ, STL) with thumbnail generation via Filament's `gltf_viewer --batch`
+- Docker image with gltf_viewer for 3D model rendering (`ghcr.io/alanaktion/gallery:gltf`)
 
 0.8.0
 

@@ -1,0 +1,36 @@
+FROM docker.io/library/python
+
+WORKDIR /usr/src/app
+RUN pip install --no-cache-dir Pillow python-dotenv
+
+# Install system dependencies for headless rendering with gltf_viewer
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libegl1 \
+    libegl-mesa0 \
+    libgl1 \
+    libgl1-mesa-dri \
+    xauth \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and install Filament's gltf_viewer
+ARG FILAMENT_VERSION=v1.69.4
+RUN curl -fL "https://github.com/google/filament/releases/download/${FILAMENT_VERSION}/filament-${FILAMENT_VERSION}-linux.tgz" \
+    -o /tmp/filament.tgz \
+    && mkdir -p /tmp/filament-extract \
+    && tar -xzf /tmp/filament.tgz -C /tmp/filament-extract \
+    && find /tmp/filament-extract -name 'gltf_viewer' -type f \
+       -exec install -m 755 {} /usr/local/bin/gltf_viewer \; \
+    && rm -rf /tmp/filament.tgz /tmp/filament-extract
+
+COPY gallery.py .
+
+ENV GALLERY_HOST=0.0.0.0
+ENV GALLERY_PORT=8000
+ENV GALLERY_DIRECTORY=/gallery
+ENV THUMBNAIL_DIRECTORY=/thm
+EXPOSE 8000
+VOLUME [ "/gallery" ]
+VOLUME [ "/thm" ]
+CMD [ "python", "./gallery.py" ]
