@@ -1,6 +1,6 @@
 <?php
 /**
- * Gallery 0.6.2
+ * Gallery 0.6.3
  * The ultimate single-file photo gallery
  * @author Alan Hardman <alan@phpizza.com>
  */
@@ -74,22 +74,130 @@ if(is_file("gallery-config.php")) {
 // Determine if we're on a Windows system
 define("IS_WIN", (strncasecmp(PHP_OS, "WIN", 3) == 0) ? true : false);
 
+/**
+ * Normalize an untrusted relative path.
+ * Returns null when traversal is attempted.
+ */
+function normalize_relative_path(?string $path): ?string
+{
+	if ($path === null) {
+		return '';
+	}
+
+	$path = trim(str_replace("\0", '', $path));
+	$path = str_replace('\\', '/', $path);
+	$path = trim($path, '/');
+
+	if ($path === '') {
+		return '';
+	}
+
+	$segments = explode('/', $path);
+	$normalized = array();
+	foreach ($segments as $segment) {
+		if ($segment === '' || $segment === '.') {
+			continue;
+		}
+		if ($segment === '..') {
+			return null;
+		}
+		$normalized[] = $segment;
+	}
+
+	return implode('/', $normalized);
+}
+
+/**
+ * Resolve a relative path and ensure it stays within the configured base directory.
+ */
+function resolve_path_in_base(string $base_dir, ?string $relative_path, string $expected_type = 'any'): ?string
+{
+	$relative = normalize_relative_path($relative_path);
+	if ($relative === null) {
+		return null;
+	}
+
+	$base_dir = rtrim($base_dir, DIRECTORY_SEPARATOR);
+	$candidate = $base_dir;
+	if ($relative !== '') {
+		$candidate .= DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+	}
+
+	$resolved = realpath($candidate);
+	if ($resolved === false) {
+		return null;
+	}
+
+	$base_prefix = $base_dir . DIRECTORY_SEPARATOR;
+	if ($resolved !== $base_dir && strncmp($resolved, $base_prefix, strlen($base_prefix)) !== 0) {
+		return null;
+	}
+
+	if ($expected_type === 'file' && !is_file($resolved)) {
+		return null;
+	}
+	if ($expected_type === 'dir' && !is_dir($resolved)) {
+		return null;
+	}
+
+	return $resolved;
+}
+
+/**
+ * Build a stable thumbnail cache key from sanitized path parts.
+ */
+function build_thumb_cache_key(string $dir, string $name): string
+{
+	$dir = trim($dir, '/');
+	return sha1($dir === '' ? $name : $dir . '/' . $name);
+}
+
+/**
+ * Parse a request scale value and only allow integer values 1-3.
+ */
+function get_request_scale(array $request): int
+{
+	if (!isset($request['scale'])) {
+		return 1;
+	}
+
+	$value = trim((string)$request['scale']);
+	if (!preg_match('/^[1-3]$/', $value)) {
+		return 1;
+	}
+
+	return (int)$value;
+}
+
 // Get the current filename for use in thumbnail, file, and folder links
 $self = basename(__FILE__);
 
+$base_dir_config = rtrim($config["directory"], "/\\");
+$base_dir_real = realpath($base_dir_config);
+if ($base_dir_real === false || !is_dir($base_dir_real)) {
+	http_response_code(500);
+	exit;
+}
+
+$config["base_directory"] = $base_dir_real;
+
 // Get the requested gallery folder
 $dir_level = 0;
-$config["base_directory"] = $config["directory"];
-if(!empty($_GET["dir"])) {
-	$_GET["dir"] = trim($_GET["dir"], "/");
-	if(strpos($_GET["dir"], "../") === false && is_dir($config["directory"] . $_GET["dir"])) {
-		$config["directory"] .= $_GET["dir"];
-		$dir_level = substr_count($_GET["dir"], "/") + 1;
+$requested_dir = normalize_relative_path($_GET["dir"] ?? '');
+$current_dir = '';
+if ($requested_dir !== null && $requested_dir !== '') {
+	$resolved_dir = resolve_path_in_base($config["base_directory"], $requested_dir, 'dir');
+	if ($resolved_dir !== null) {
+		$current_dir = $requested_dir;
+		$dir_level = substr_count($current_dir, "/") + 1;
 	}
 }
 
-$dir = rtrim($config["directory"], "/");
-$current_dir = ltrim($dir, "./");
+$dir = rtrim($base_dir_config, "/\\");
+if ($current_dir !== '') {
+	$dir .= "/" . $current_dir;
+}
+$dir_fs = resolve_path_in_base($config["base_directory"], $current_dir, 'dir');
 
 
 
@@ -109,14 +217,19 @@ if(!empty($_GET["thm"])) {
 			mkdir($cache_dir);
 			if(IS_WIN) {
 				// Hide folder on Windows
-				@shell_exec("attrib +h {$cache_dir}");
+				@shell_exec('attrib +h ' . escapeshellarg($cache_dir));
 			}
 		}
 	}
 
 	// Output thumbnail
-	$file = empty($_GET["dir"]) ? sha1($_GET["thm"]) : sha1($_GET["dir"] . $_GET["thm"]);
-	$scale = (int)($_GET['scale'] ?? 1);
+	$thm_name = normalize_relative_path($_GET["thm"] ?? '');
+	if ($thm_name === null || $thm_name === '') {
+		exit;
+	}
+
+	$file = build_thumb_cache_key($current_dir, $thm_name);
+	$scale = get_request_scale($_GET);
 	if ($scale > 1) {
 		$file .= "@{$scale}x";
 	}
@@ -126,9 +239,9 @@ if(!empty($_GET["thm"])) {
 		readfile($cache_dir . "/" . $file . ".jpg");
 	} else {
 		// No thumbnail cache exists, generate thumbnail
-		if(strpos($_GET["thm"], "../") === false && is_file($dir . "/" . $_GET["thm"])) {
-			$src = $dir . "/" . $_GET["thm"];
-			mkthumb($src, $config, $scale);
+		$src = resolve_path_in_base($dir_fs, $thm_name, 'file');
+		if($src !== null) {
+			mkthumb($src, $config, $file, $scale);
 		}
 	}
 
@@ -139,14 +252,14 @@ if(!empty($_GET["thm"])) {
 /**
  * Generate and optionally save a thumbnail image
  */
-function mkthumb(string $src, array $config, int $scale = 1)
+function mkthumb(string $src, array $config, string $file, int $scale = 1)
 {
-	if ($scale > 3) {
+	if ($scale < 1 || $scale > 3) {
 		throw new Exception('Invalid thumbnail scale');
 	}
 
 	// Load image file, create canvas for new image, and fill it with gray
-	$img = @imagecreatefromstring(file_get_contents($config["base_directory"] . "/" . $src));
+	$img = @imagecreatefromstring(file_get_contents($src));
 	if(!$img) {
 		return false;
 	}
@@ -172,10 +285,6 @@ function mkthumb(string $src, array $config, int $scale = 1)
 	// Save/output generated image
 	if($config["thumbnails"]["cache"]) {
 		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
-		$file = empty($_GET["dir"]) ? sha1($_GET["thm"]) : sha1($_GET["dir"] . $_GET["thm"]);
-		if ($scale > 1) {
-			$file .= "@{$scale}x";
-		}
 		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
 
 		header("Content-Type: image/jpeg");
@@ -204,14 +313,19 @@ if(!empty($_GET["dirthm"])) {
 			mkdir($cache_dir);
 			if(IS_WIN) {
 				// Hide folder on Windows
-				@shell_exec("attrib +h {$cache_dir}");
+				@shell_exec('attrib +h ' . escapeshellarg($cache_dir));
 			}
 		}
 	}
 
 	// Output thumbnail
-	$file = sha1($dir . "/" . $_GET["dirthm"]);
-	$scale = (int)($_GET['scale'] ?? 1);
+	$dirthm_name = normalize_relative_path($_GET["dirthm"] ?? '');
+	if ($dirthm_name === null || $dirthm_name === '') {
+		exit;
+	}
+
+	$file = build_thumb_cache_key($current_dir, $dirthm_name);
+	$scale = get_request_scale($_GET);
 	if ($scale > 1) {
 		$file .= "@{$scale}x";
 	}
@@ -221,9 +335,9 @@ if(!empty($_GET["dirthm"])) {
 		readfile($cache_dir . "/" . $file . ".jpg");
 	} else {
 		// No thumbnail cache exists, generate thumbnail
-		if(strpos($_GET["dirthm"], "../") === false && is_dir($dir . "/" . $_GET["dirthm"])) {
-			$src = $dir . "/" . $_GET["dirthm"];
-			mkdirthumb($src, $config, $scale);
+		$src = resolve_path_in_base($dir_fs, $dirthm_name, 'dir');
+		if($src !== null) {
+			mkdirthumb($src, $config, $file, $scale);
 		}
 	}
 
@@ -234,9 +348,9 @@ if(!empty($_GET["dirthm"])) {
 /**
  * Generate and optionally save a thumbnail image
  */
-function mkdirthumb($src, array $config, int $scale)
+function mkdirthumb($src, array $config, string $file, int $scale)
 {
-	if ($scale > 3) {
+	if ($scale < 1 || $scale > 3) {
 		throw new Exception('Invalid thumbnail scale');
 	}
 
@@ -284,10 +398,6 @@ function mkdirthumb($src, array $config, int $scale)
 	// Save/output generated image
 	if($config["thumbnails"]["cache"]) {
 		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
-		$file = sha1($src);
-		if ($scale > 1) {
-			$file .= "@{$scale}x";
-		}
 		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
 
 		header("Content-Type: image/jpeg");
@@ -304,25 +414,25 @@ function mkdirthumb($src, array $config, int $scale)
 $directories = array();
 $images = array();
 $files = array();
-$dh = opendir($dir);
+$dh = opendir($dir_fs);
 while(($f = readdir($dh)) !== false) {
 
 	// Check if we're including directories and if the current item is a directory
-	if($config["include_subdirectories"] && is_dir($dir . "/" . $f) && substr($f, 0, 1) != "." && $f != 'thm') {
+	if($config["include_subdirectories"] && is_dir($dir_fs . "/" . $f) && substr($f, 0, 1) != "." && $f != 'thm') {
 		$directories[] = $f;
 	}
 
 	// Check if file matches the image file extensions
-	if(in_array(strtolower(pathinfo($dir . "/" . $f, PATHINFO_EXTENSION)), $config["image_extensions"])) {
+	if(in_array(strtolower(pathinfo($dir_fs . "/" . $f, PATHINFO_EXTENSION)), $config["image_extensions"])) {
 		// Attempt to get image metadata, and add it if successful
-		$s = getimagesize($dir . "/" . $f);
+		$s = getimagesize($dir_fs . "/" . $f);
 		if($s[0] && $s[1]) {
 			$images[] = $f;
 		}
 	}
 
 	// Check if file matches the generic file extensions
-	if(!empty($config["file_extensions"]) && in_array(strtolower(pathinfo($dir . "/" . $f, PATHINFO_EXTENSION)), $config["file_extensions"])) {
+	if(!empty($config["file_extensions"]) && in_array(strtolower(pathinfo($dir_fs . "/" . $f, PATHINFO_EXTENSION)), $config["file_extensions"])) {
 		$files[] = $f;
 	}
 
@@ -331,7 +441,7 @@ closedir($dh);
 
 // Remove hidden items on Windows
 if(IS_WIN) {
-	exec("DIR \"{$dir}\" /AH /B", $hidden);
+	exec("DIR " . escapeshellarg($dir_fs) . " /AH /B", $hidden);
 	foreach($hidden as $item) {
 		if($key = array_search(trim($item), $directories)) {
 			unset($directories[$key]);
