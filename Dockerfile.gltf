@@ -1,8 +1,5 @@
 FROM docker.io/library/python
 
-WORKDIR /usr/src/app
-RUN pip install --no-cache-dir Pillow python-dotenv pi-heif
-
 # Install system dependencies for headless rendering with gltf_viewer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -26,6 +23,9 @@ RUN curl -fL "https://github.com/google/filament/releases/download/${FILAMENT_VE
        -exec install -m 755 {} /usr/local/bin/gltf_viewer \; \
     && rm -rf /tmp/filament.tgz /tmp/filament-extract
 
+RUN pip install --no-cache-dir Pillow python-dotenv pi-heif
+
+WORKDIR /usr/src/app
 COPY gallery.py .
 
 ENV GALLERY_HOST=0.0.0.0
