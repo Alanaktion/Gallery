@@ -1,7 +1,7 @@
 FROM docker.io/library/python
 
 WORKDIR /usr/src/app
-RUN apt-get update && apt-get install -y --no-install-recommends libheif1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libheif1 && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir Pillow python-dotenv pi-heif
 
 COPY gallery.py .

@@ -1,15 +1,17 @@
 FROM docker.io/library/python
 
 WORKDIR /usr/src/app
-RUN pip install --no-cache-dir Pillow python-dotenv
+RUN pip install --no-cache-dir Pillow python-dotenv pi-heif
 
 # Install system dependencies for headless rendering with gltf_viewer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ffmpeg \
     libegl1 \
     libegl-mesa0 \
     libgl1 \
     libgl1-mesa-dri \
+    libheif1 \
     xauth \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
