@@ -17,6 +17,13 @@ try:
 except ImportError:
     pass
 
+try:
+    from pi_heif import register_heif_opener
+    register_heif_opener()
+    heif_support = True
+except ImportError:
+    heif_support = False
+
 ffmpeg = os.environ.get('FFMPEG_PATH', shutil.which('ffmpeg'))
 gltf_viewer = os.environ.get('GLTF_VIEWER_PATH', shutil.which('gltf_viewer'))
 
@@ -318,7 +325,11 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.title = os.environ.get('GALLERY_TITLE', 'Gallery')
         img_exts = 'jpg,jpeg,jpe,jfif,png,gif,bmp,webp'
-        file_exts = 'txt,zip,rar,7z,heif,heic,svg,m4a,mp3,ogg'
+        file_exts = 'txt,zip,rar,7z,svg,m4a,mp3,ogg'
+        if heif_support:
+            img_exts += ',heif,heic'
+        else:
+            file_exts += ',heif,heic'
         if ffmpeg:
             img_exts += ',mp4,m4v,webm'
         else:
