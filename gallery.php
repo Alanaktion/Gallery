@@ -191,9 +191,13 @@ function get_thumbnail_format(array $get, bool $avif_support, bool $webp_support
 
 /**
  * Output an image resource in the given format, optionally saving to a cache file.
+ * $format must be one of: 'avif', 'webp', 'jpeg'.
  */
 function output_thumbnail(\GdImage $res, string $format, string $cache_file = ''): void
 {
+	$content_types = ['avif' => 'image/avif', 'webp' => 'image/webp', 'jpeg' => 'image/jpeg'];
+	$content_type = $content_types[$format] ?? 'image/jpeg';
+
 	if ($cache_file !== '') {
 		if ($format === 'avif') {
 			imageavif($res, $cache_file);
@@ -202,10 +206,10 @@ function output_thumbnail(\GdImage $res, string $format, string $cache_file = ''
 		} else {
 			imagejpeg($res, $cache_file);
 		}
-		header("Content-Type: image/" . $format);
+		header("Content-Type: " . $content_type);
 		readfile($cache_file);
 	} else {
-		header("Content-Type: image/" . $format);
+		header("Content-Type: " . $content_type);
 		if ($format === 'avif') {
 			imageavif($res);
 		} elseif ($format === 'webp') {

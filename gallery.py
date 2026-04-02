@@ -426,22 +426,22 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             for d in directories:
                 thm_base = f'/.thm/{qe(rel)}/{qe(d.name)}'
-                avif_source = f'\n    <source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">' if avif_support else ''
+                avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
                 response_content += f"""
 <a class="dir" href="{qe(d.name)}" title="{esc(d.name)}">
-    <picture>{avif_source}
-        <img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
+    <picture>
+        {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
     </picture>
     <span>{esc(d.name)}</span>
 </a>
 """
             for image in images:
                 thm_base = f'/.thm/{qe(rel)}/{qe(image.name)}'
-                avif_source = f'\n        <source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">' if avif_support else ''
+                avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
                 response_content += f"""
 <a class="image" href="{qe(image.name)}" title="{esc(image.name)}">
-    <picture>{avif_source}
-        <img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
+    <picture>
+        {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
     </picture>
     <span>{esc(image.name)}</span>
 </a>
