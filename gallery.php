@@ -64,6 +64,10 @@ if (function_exists('imagecreatefromavif')) {
 	$config["image_extensions"][] = "avif";
 }
 
+// Check for AVIF and WebP thumbnail output support
+$avif_encode_support = function_exists('imageavif');
+$webp_encode_support = function_exists('imagewebp');
+
 // Include user configuration file if it exists
 if(is_file("gallery-config.php")) {
 	include "gallery-config.php";
@@ -169,6 +173,62 @@ function get_request_scale(array $request): int
 	return (int)$value;
 }
 
+/**
+ * Determine the thumbnail output format based on the request and server support.
+ * Returns 'avif', 'webp', or 'jpeg'.
+ */
+function get_thumbnail_format(array $get, bool $avif_support, bool $webp_support): string
+{
+	$fmt = $get['fmt'] ?? '';
+	if ($fmt === 'avif' && $avif_support) {
+		return 'avif';
+	}
+	if ($webp_support) {
+		return 'webp';
+	}
+	return 'jpeg';
+}
+
+/**
+ * Output an image resource in the given format, optionally saving to a cache file.
+ * $format must be one of: 'avif', 'webp', 'jpeg'.
+ *
+ * @param resource|\GdImage $res
+ */
+function output_thumbnail($res, string $format, string $cache_file = ''): void
+{
+	$content_types = ['avif' => 'image/avif', 'webp' => 'image/webp', 'jpeg' => 'image/jpeg'];
+	$content_type = $content_types[$format] ?? 'image/jpeg';
+
+	if ($cache_file !== '') {
+		$encoded = false;
+		if ($format === 'avif') {
+			$encoded = imageavif($res, $cache_file);
+		} elseif ($format === 'webp') {
+			$encoded = imagewebp($res, $cache_file);
+		} else {
+			$encoded = imagejpeg($res, $cache_file);
+		}
+		if (!$encoded || !is_file($cache_file)) {
+			header('HTTP/1.1 500 Internal Server Error');
+			header('Content-Type: text/plain; charset=utf-8');
+			echo 'Failed to generate thumbnail.';
+			return;
+		}
+		header("Content-Type: " . $content_type);
+		readfile($cache_file);
+	} else {
+		header("Content-Type: " . $content_type);
+		if ($format === 'avif') {
+			imageavif($res);
+		} elseif ($format === 'webp') {
+			imagewebp($res);
+		} else {
+			imagejpeg($res);
+		}
+	}
+}
+
 // Get the current filename for use in thumbnail, file, and folder links
 $self = basename(__FILE__);
 
@@ -233,15 +293,17 @@ if(!empty($_GET["thm"])) {
 	if ($scale > 1) {
 		$file .= "@{$scale}x";
 	}
-	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . ".jpg")) {
+	$thm_format = get_thumbnail_format($_GET, $avif_encode_support, $webp_encode_support);
+	$thm_ext = ($thm_format === 'jpeg') ? 'jpg' : $thm_format;
+	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . "." . $thm_ext)) {
 		// Thumbnail cache exists, output it
-		header("Content-Type: image/jpeg");
-		readfile($cache_dir . "/" . $file . ".jpg");
+		header("Content-Type: image/" . $thm_format);
+		readfile($cache_dir . "/" . $file . "." . $thm_ext);
 	} else {
 		// No thumbnail cache exists, generate thumbnail
 		$src = resolve_path_in_base($dir_fs, $thm_name, 'file');
 		if($src !== null) {
-			mkthumb($src, $config, $file, $scale);
+			mkthumb($src, $config, $file, $scale, $thm_format);
 		}
 	}
 
@@ -252,7 +314,7 @@ if(!empty($_GET["thm"])) {
 /**
  * Generate and optionally save a thumbnail image
  */
-function mkthumb(string $src, array $config, string $file, int $scale = 1)
+function mkthumb(string $src, array $config, string $file, int $scale = 1, string $format = 'jpeg')
 {
 	if ($scale < 1 || $scale > 3) {
 		throw new Exception('Invalid thumbnail scale');
@@ -281,17 +343,13 @@ function mkthumb(string $src, array $config, string $file, int $scale = 1)
 		$d, $d
 	);
 
-
 	// Save/output generated image
+	$ext = ($format === 'jpeg') ? 'jpg' : $format;
 	if($config["thumbnails"]["cache"]) {
 		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
-		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
-
-		header("Content-Type: image/jpeg");
-		readfile($cache_dir . "/" . $file . ".jpg");
+		output_thumbnail($res, $format, $cache_dir . "/" . $file . "." . $ext);
 	} else {
-		header("Content-Type: image/jpeg");
-		imagejpeg($res);
+		output_thumbnail($res, $format);
 	}
 }
 
@@ -329,15 +387,17 @@ if(!empty($_GET["dirthm"])) {
 	if ($scale > 1) {
 		$file .= "@{$scale}x";
 	}
-	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . ".jpg")) {
+	$thm_format = get_thumbnail_format($_GET, $avif_encode_support, $webp_encode_support);
+	$thm_ext = ($thm_format === 'jpeg') ? 'jpg' : $thm_format;
+	if($config["thumbnails"]["cache"] && is_file($cache_dir . "/" . $file . "." . $thm_ext)) {
 		// Thumbnail cache exists, output it
-		header("Content-Type: image/jpeg");
-		readfile($cache_dir . "/" . $file . ".jpg");
+		header("Content-Type: image/" . $thm_format);
+		readfile($cache_dir . "/" . $file . "." . $thm_ext);
 	} else {
 		// No thumbnail cache exists, generate thumbnail
 		$src = resolve_path_in_base($dir_fs, $dirthm_name, 'dir');
 		if($src !== null) {
-			mkdirthumb($src, $config, $file, $scale);
+			mkdirthumb($src, $config, $file, $scale, $thm_format);
 		}
 	}
 
@@ -348,7 +408,7 @@ if(!empty($_GET["dirthm"])) {
 /**
  * Generate and optionally save a thumbnail image
  */
-function mkdirthumb($src, array $config, string $file, int $scale)
+function mkdirthumb($src, array $config, string $file, int $scale, string $format = 'jpeg')
 {
 	if ($scale < 1 || $scale > 3) {
 		throw new Exception('Invalid thumbnail scale');
@@ -396,15 +456,12 @@ function mkdirthumb($src, array $config, string $file, int $scale)
 	}
 
 	// Save/output generated image
+	$ext = ($format === 'jpeg') ? 'jpg' : $format;
 	if($config["thumbnails"]["cache"]) {
 		$cache_dir = $config["base_directory"] . "/" . (IS_WIN ? "thm" : ".thm");
-		imagejpeg($res, $cache_dir . "/" . $file . ".jpg");
-
-		header("Content-Type: image/jpeg");
-		readfile($cache_dir . "/" . $file . ".jpg");
+		output_thumbnail($res, $format, $cache_dir . "/" . $file . "." . $ext);
 	} else {
-		header("Content-Type: image/jpeg");
-		imagejpeg($res);
+		output_thumbnail($res, $format);
 	}
 }
 
@@ -544,6 +601,9 @@ if ($current_dir) {
 		background-repeat: no-repeat;
 	}
 	a.file:hover, a.file:focus {background-color: #4c4c4c;}
+	a picture {
+		display: contents;
+	}
 	a img {
 		display: block;
 		max-width: 100%;
@@ -673,22 +733,34 @@ if ($current_dir) {
 		<div class="grid">
 			<?php foreach($directories as $d) { ?>
 				<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
-					<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>"
-						srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;dirthm=<?= u($d) ?>&amp;scale=2 2x"
-						loading="lazy" decoding="async"
-						width="<?= $config['thumbnails']['size'] ?>"
-						height="<?= $config['thumbnails']['size'] ?>">
+					<?php $dirthm_base = e($self) . "?dir=" . u($current_dir) . "&amp;dirthm=" . u($d); ?>
+					<picture>
+						<?php if($avif_encode_support): ?>
+						<source srcset="<?= $dirthm_base ?>&amp;fmt=avif 1x, <?= $dirthm_base ?>&amp;fmt=avif&amp;scale=2 2x" type="image/avif">
+						<?php endif; ?>
+						<img src="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>"
+							srcset="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2 2x"
+							loading="lazy" decoding="async"
+							width="<?= $config['thumbnails']['size'] ?>"
+							height="<?= $config['thumbnails']['size'] ?>">
+					</picture>
 					<span><?= e($d) ?></span>
 				</a>
 			<?php } ?>
 
 			<?php foreach($images as $i) { ?>
 				<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
-					<img src="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>"
-						srcset="<?= e($self) ?>?dir=<?= u($current_dir) ?>&amp;thm=<?= u($i) ?>&amp;scale=2 2x"
-						loading="lazy" decoding="async"
-						width="<?= $config['thumbnails']['size'] ?>"
-						height="<?= $config['thumbnails']['size'] ?>">
+					<?php $thm_base = e($self) . "?dir=" . u($current_dir) . "&amp;thm=" . u($i); ?>
+					<picture>
+						<?php if($avif_encode_support): ?>
+						<source srcset="<?= $thm_base ?>&amp;fmt=avif 1x, <?= $thm_base ?>&amp;fmt=avif&amp;scale=2 2x" type="image/avif">
+						<?php endif; ?>
+						<img src="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>"
+							srcset="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2 2x"
+							loading="lazy" decoding="async"
+							width="<?= $config['thumbnails']['size'] ?>"
+							height="<?= $config['thumbnails']['size'] ?>">
+					</picture>
 					<?php if($config["interface"]["labels"]) { ?>
 						<span><?= e($i) ?></span>
 					<?php } ?>

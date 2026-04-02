@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import http.server
 import io
+import mimetypes
 import os
 import re
 import shutil
@@ -26,6 +27,20 @@ except ImportError:
 
 ffmpeg = os.environ.get('FFMPEG_PATH', shutil.which('ffmpeg'))
 gltf_viewer = os.environ.get('GLTF_VIEWER_PATH', shutil.which('gltf_viewer'))
+
+
+def _check_avif_support():
+    try:
+        buf = io.BytesIO()
+        PIL.Image.new('RGB', (1, 1)).save(buf, 'avif')
+        return True
+    except Exception:
+        return False
+
+avif_support = _check_avif_support()
+
+# Ensure AVIF MIME type is registered for SimpleHTTPRequestHandler to serve correctly
+mimetypes.add_type('image/avif', '.avif')
 
 
 _BOOLEAN_STATES = {'1': True, 'yes': True, 'true': True, 'on': True,
@@ -110,6 +125,9 @@ a.file {
     background-repeat: no-repeat;
 }
 a.file:hover, a.file:focus {background-color: #4c4c4c;}
+a picture {
+    display: contents;
+}
 a img {
     display: block;
     object-fit: cover;
@@ -330,6 +348,10 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             img_exts += ',heif,heic'
         else:
             file_exts += ',heif,heic'
+        if avif_support:
+            img_exts += ',avif'
+        else:
+            file_exts += ',avif'
         if ffmpeg:
             img_exts += ',mp4,m4v,webm'
         else:
@@ -407,16 +429,24 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         <div class="grid">{breadcrumbs}"""
 
             for d in directories:
+                thm_base = f'/.thm/{qe(rel)}/{qe(d.name)}'
+                avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
                 response_content += f"""
 <a class="dir" href="{qe(d.name)}" title="{esc(d.name)}">
-    <img type="image/webp" src="/.thm/{qe(rel)}/{qe(d.name)}" srcset="/.thm/{qe(rel)}/{qe(d.name)}?scale=2 2x" loading="lazy" decoding="async" alt>
+    <picture>
+        {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
+    </picture>
     <span>{esc(d.name)}</span>
 </a>
 """
             for image in images:
+                thm_base = f'/.thm/{qe(rel)}/{qe(image.name)}'
+                avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
                 response_content += f"""
 <a class="image" href="{qe(image.name)}" title="{esc(image.name)}">
-    <img type="image/webp" src="/.thm/{qe(rel)}/{qe(image.name)}" srcset="/.thm/{qe(rel)}/{qe(image.name)}?scale=2 2x" loading="lazy" decoding="async" alt>
+    <picture>
+        {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
+    </picture>
     <span>{esc(image.name)}</span>
 </a>
 """
@@ -459,15 +489,18 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             suffix = f'@{scale}x'
             size *= scale
 
+        fmt = 'avif' if (qs.get('fmt', [''])[0] == 'avif' and avif_support) else 'webp'
+        mime_type = f'image/{fmt}'
+
         cachedir = thumb_dir()
         try:
             if cachedir:
-                cachefn = f'{sha1}{suffix}.webp'
+                cachefn = f'{sha1}{suffix}.{fmt}'
                 cacheabs = os.path.abspath(f'{cachedir}/{cachefn}')
 
                 if not os.path.isfile(cacheabs):
                     if os.path.isdir(src):
-                        self.save_dir_thumb(src, cacheabs, size)
+                        self.save_dir_thumb(src, cacheabs, size, fmt)
                     else:
                         if path.endswith(('.mp4', '.m4v', '.webm')):
                             vimg = ffmpeg_thumb(src)
@@ -480,7 +513,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                         else:
                             thm = PIL.Image.open(src)
                         thm = cropped_thumbnail(thm, (size, size))
-                        thm.save(cacheabs, 'webp', quality=70)
+                        thm.save(cacheabs, fmt, quality=70)
 
                 if cachedir == '.thm':
                     self.path = f'.thm/{cachefn}'
@@ -491,7 +524,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 target = io.BytesIO()
                 if os.path.isdir(src):
-                    self.save_dir_thumb(src, target, size)
+                    self.save_dir_thumb(src, target, size, fmt)
                 else:
                     if path.endswith(('.mp4', '.m4v', '.webm')):
                         vimg = ffmpeg_thumb(src)
@@ -504,10 +537,10 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                     else:
                         thm = PIL.Image.open(src)
                     thm = cropped_thumbnail(thm, (size, size))
-                    thm.save(target, 'webp', quality=70)
+                    thm.save(target, fmt, quality=70)
 
             self.send_response(200)
-            self.send_header('Content-Type', 'image/webp')
+            self.send_header('Content-Type', mime_type)
             self.send_header('Cache-Control', 'max-age=86400')
             self.end_headers()
             try:
@@ -519,7 +552,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         except PermissionError:
             self.send_error(403)
 
-    def save_dir_thumb(self, directory: str, outfile, size: int):
+    def save_dir_thumb(self, directory: str, outfile, size: int, fmt: str = 'webp'):
         thm = PIL.Image.new('RGBA', (size, size), (0, 0, 0, 0))
         _, images, _ = self._read_dir(directory)
         count = 0
@@ -535,7 +568,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                 count += 1
             except PIL.UnidentifiedImageError:
                 pass
-        thm.save(outfile, 'webp', quality=70)
+        thm.save(outfile, fmt, quality=70)
 
 
 def args_to_env():
