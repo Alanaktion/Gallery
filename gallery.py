@@ -348,6 +348,10 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             img_exts += ',heif,heic'
         else:
             file_exts += ',heif,heic'
+        if avif_support:
+            img_exts += ',avif'
+        else:
+            file_exts += ',avif'
         if ffmpeg:
             img_exts += ',mp4,m4v,webm'
         else:
