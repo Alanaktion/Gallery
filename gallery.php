@@ -192,19 +192,28 @@ function get_thumbnail_format(array $get, bool $avif_support, bool $webp_support
 /**
  * Output an image resource in the given format, optionally saving to a cache file.
  * $format must be one of: 'avif', 'webp', 'jpeg'.
+ *
+ * @param resource|\GdImage $res
  */
-function output_thumbnail(\GdImage $res, string $format, string $cache_file = ''): void
+function output_thumbnail($res, string $format, string $cache_file = ''): void
 {
 	$content_types = ['avif' => 'image/avif', 'webp' => 'image/webp', 'jpeg' => 'image/jpeg'];
 	$content_type = $content_types[$format] ?? 'image/jpeg';
 
 	if ($cache_file !== '') {
+		$encoded = false;
 		if ($format === 'avif') {
-			imageavif($res, $cache_file);
+			$encoded = imageavif($res, $cache_file);
 		} elseif ($format === 'webp') {
-			imagewebp($res, $cache_file);
+			$encoded = imagewebp($res, $cache_file);
 		} else {
-			imagejpeg($res, $cache_file);
+			$encoded = imagejpeg($res, $cache_file);
+		}
+		if (!$encoded || !is_file($cache_file)) {
+			header('HTTP/1.1 500 Internal Server Error');
+			header('Content-Type: text/plain; charset=utf-8');
+			echo 'Failed to generate thumbnail.';
+			return;
 		}
 		header("Content-Type: " . $content_type);
 		readfile($cache_file);
