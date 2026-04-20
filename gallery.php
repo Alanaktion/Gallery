@@ -57,6 +57,7 @@ $config = array(
 	"thumbnails" => array(
 		"size" => 200,
 		"cache" => true,
+		"justified_max_width" => 2000,
 	)
 
 );
@@ -337,6 +338,10 @@ function mkthumb(string $src, array $config, string $file, int $scale = 1, strin
 	if ($justified && $source_height > 0) {
 		$target_height = $size;
 		$target_width = max(1, (int) round($source_width * ($target_height / $source_height)));
+		$max_target_width = isset($config["thumbnails"]["justified_max_width"])
+			? max(1, (int) $config["thumbnails"]["justified_max_width"] * $scale)
+			: $size;
+		$target_width = min($target_width, $max_target_width);
 		$res = imagecreatetruecolor($target_width, $target_height);
 		$w = imagecolorallocate($res, 64, 64, 64);
 		imagefill($res, 0, 0, $w);
