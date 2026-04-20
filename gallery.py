@@ -483,7 +483,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                 response_content += """
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/dist/index.css">
 """
-            response_content += """
+            response_content += f"""
 </head>
 <body>
     <div class="container">
