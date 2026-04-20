@@ -435,6 +435,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             directories, images, files = self._read_dir(directory)
             justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false'))
+            thumb_size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
             layout_qs = '?layout=j' if justified else ''
             layout_query = '&layout=j' if justified else ''
 
@@ -517,7 +518,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     <script>
         jQuery(function($) {{
             $('#justified-grid').justifiedGallery({{
-                rowHeight: {int(os.environ.get('THUMBNAIL_SIZE', '200'))},
+                rowHeight: {thumb_size},
                 margins: 4,
                 lastRow: 'nojustify'
             }});
