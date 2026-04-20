@@ -724,7 +724,7 @@ $justified = !empty($config["interface"]["justified"]);
 		}
 	}
 </style>
-<?php if(@$config["interface"]["dark"]) { ?>
+<?php if (!empty($config["interface"]["dark"])): ?>
 <style type="text/css">
 <?php if ($config["interface"]["dark"] === 'auto'): ?>
 @media only screen and (prefers-color-scheme: dark) {
@@ -748,7 +748,7 @@ $justified = !empty($config["interface"]["justified"]);
 }
 <?php endif; ?>
 </style>
-<?php } ?>
+<?php endif; ?>
 <?php if ($justified) { ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/css/justifiedGallery.min.css">
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>

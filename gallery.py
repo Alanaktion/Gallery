@@ -314,11 +314,12 @@ def layout_thumbnail(img: PIL.Image.Image, size: int, justified: bool = False):
     if not justified:
         return cropped_thumbnail(img, (size, size))
 
-    width, height = img.size
-    if height <= 0:
+    source_width, source_height = img.size
+    if source_height <= 0:
         return cropped_thumbnail(img, (size, size))
 
-    target_width = max(1, round(width * (size / height)))
+    scale = size / source_height
+    target_width = max(1, round(source_width * scale))
     return img.resize((target_width, size), PIL.Image.Resampling.LANCZOS)
 
 
