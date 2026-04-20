@@ -178,6 +178,37 @@ a.image:focus span {
 }
 """
 
+    if _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')):
+        styles += """
+.container {
+    max-width: none !important;
+}
+.grid.justified-gallery {
+    display: block !important;
+}
+.grid.justified-gallery a.image {
+    float: none;
+    margin: 0;
+}
+.justified-gallery > a > picture > img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+@media only screen and (max-width: {MW}px) {
+    .grid.justified-gallery {
+        display: block !important;
+    }
+    .grid.justified-gallery a.image {
+        width: auto;
+        aspect-ratio: auto;
+    }
+}
+""".replace('{MW}', str((size + 6) * 4))
+
     c = 3
     while (size + 6) * c <= 3840:
         styles += """
@@ -285,6 +316,28 @@ def cropped_thumbnail(img: PIL.Image.Image, size):
     result = img.crop((left, top, right, bottom))
     result.thumbnail(size)
     return result
+
+
+def layout_thumbnail(img: PIL.Image.Image, size: int, justified: bool = False):
+    if not justified:
+        return cropped_thumbnail(img, (size, size))
+
+    source_width, source_height = img.size
+    if source_height <= 0:
+        return cropped_thumbnail(img, (size, size))
+
+    scale = size / source_height
+    target_width = max(1, round(source_width * scale))
+
+    try:
+        max_width_multiplier = int(os.environ.get('JUSTIFIED_THUMBNAIL_MAX_WIDTH_MULTIPLIER', '4'))
+    except ValueError:
+        max_width_multiplier = 4
+    max_width_multiplier = max(1, max_width_multiplier)
+    max_target_width = max(1, size * max_width_multiplier)
+    target_width = min(target_width, max_target_width)
+
+    return img.resize((target_width, size), PIL.Image.Resampling.LANCZOS)
 
 
 def ffmpeg_thumb(src: str):
@@ -399,6 +452,8 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         global e
         try:
             directories, images, files = self._read_dir(directory)
+            justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false'))
+            thumb_size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
 
             breadcrumbs = ""
             rel = os.path.relpath(directory, self.directory)
@@ -423,15 +478,22 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     <style type="text/css">
     {css()}
     </style>
+"""
+            if justified:
+                response_content += """
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/dist/index.css">
+"""
+            response_content += """
 </head>
 <body>
     <div class="container">
-        <div class="grid">{breadcrumbs}"""
+        {breadcrumbs}"""
 
+            dir_tiles = ""
             for d in directories:
                 thm_base = f'/.thm/{qe(rel)}/{qe(d.name)}'
                 avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
-                response_content += f"""
+                dir_tiles += f"""
 <a class="dir" href="{qe(d.name)}" title="{esc(d.name)}">
     <picture>
         {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
@@ -439,10 +501,11 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     <span>{esc(d.name)}</span>
 </a>
 """
+            image_tiles = ""
             for image in images:
                 thm_base = f'/.thm/{qe(rel)}/{qe(image.name)}'
                 avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
-                response_content += f"""
+                image_tiles += f"""
 <a class="image" href="{qe(image.name)}" title="{esc(image.name)}">
     <picture>
         {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
@@ -451,15 +514,35 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
 </a>
 """
 
+            file_tiles = ""
             for file in files:
-                response_content += f"""
+                file_tiles += f"""
 <a class="file" href="{qe(file.name)}" title="{esc(file.name)}">
     <span>{esc(file.name)}</span>
 </a>
 """
 
+            if justified:
+                if dir_tiles:
+                    response_content += f'<div class="grid">{dir_tiles}</div>'
+                response_content += f'<div id="justified-grid" class="grid justified-gallery">{image_tiles}</div>'
+                if file_tiles:
+                    response_content += f'<div class="grid">{file_tiles}</div>'
+                response_content += f"""
+    <script type="module">
+        import {{ justifiedGallery }} from 'https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/+esm';
+        justifiedGallery('#justified-grid', {{
+            rowHeight: {thumb_size},
+            margins: 4,
+            imgSelector: 'img',
+            captions: false,
+        }});
+    </script>
+"""
+            else:
+                response_content += f'<div class="grid">{dir_tiles}{image_tiles}{file_tiles}</div>'
+
             response_content += """
-        </div>
         <div class="clear"></div>
         <footer>{COUNT} items</footer>
     </div>
@@ -482,12 +565,14 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         sha1 = hashlib.sha1(src.encode()).hexdigest()
         suffix = ''
         size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
+        justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false'))
         url = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(url.query)
         if qs.get('scale'):
             scale = int(qs.get('scale', [0])[0])
             suffix = f'@{scale}x'
             size *= scale
+        mode_suffix = '-j' if justified else ''
 
         fmt = 'avif' if (qs.get('fmt', [''])[0] == 'avif' and avif_support) else 'webp'
         mime_type = f'image/{fmt}'
@@ -495,7 +580,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         cachedir = thumb_dir()
         try:
             if cachedir:
-                cachefn = f'{sha1}{suffix}.{fmt}'
+                cachefn = f'{sha1}{mode_suffix}{suffix}.{fmt}'
                 cacheabs = os.path.abspath(f'{cachedir}/{cachefn}')
 
                 if not os.path.isfile(cacheabs):
@@ -512,7 +597,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                             os.unlink(gimg)
                         else:
                             thm = PIL.Image.open(src)
-                        thm = cropped_thumbnail(thm, (size, size))
+                        thm = layout_thumbnail(thm, size, justified)
                         thm.save(cacheabs, fmt, quality=70)
 
                 if cachedir == '.thm':
@@ -536,7 +621,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                         os.unlink(gimg)
                     else:
                         thm = PIL.Image.open(src)
-                    thm = cropped_thumbnail(thm, (size, size))
+                    thm = layout_thumbnail(thm, size, justified)
                     thm.save(target, fmt, quality=70)
 
             self.send_response(200)
