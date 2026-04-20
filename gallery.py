@@ -454,8 +454,6 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             directories, images, files = self._read_dir(directory)
             justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false'))
             thumb_size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
-            layout_qs = '?layout=j' if justified else ''
-            layout_query = '&layout=j' if justified else ''
 
             breadcrumbs = ""
             rel = os.path.relpath(directory, self.directory)
@@ -491,16 +489,14 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     <div class="container">
         {breadcrumbs}"""
 
-            layout_query_attr = layout_query.replace('&', '&amp;')
-
             dir_tiles = ""
             for d in directories:
                 thm_base = f'/.thm/{qe(rel)}/{qe(d.name)}'
-                avif_source = f'<source srcset="{thm_base}?fmt=avif{layout_query_attr} 1x, {thm_base}?fmt=avif&amp;scale=2{layout_query_attr} 2x" type="image/avif">\n        ' if avif_support else ''
+                avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
                 dir_tiles += f"""
 <a class="dir" href="{qe(d.name)}" title="{esc(d.name)}">
     <picture>
-        {avif_source}<img src="{thm_base}{layout_qs}" srcset="{thm_base}?scale=2{layout_query_attr} 2x" loading="lazy" decoding="async" alt>
+        {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
     </picture>
     <span>{esc(d.name)}</span>
 </a>
@@ -508,11 +504,11 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             image_tiles = ""
             for image in images:
                 thm_base = f'/.thm/{qe(rel)}/{qe(image.name)}'
-                avif_source = f'<source srcset="{thm_base}?fmt=avif{layout_query_attr} 1x, {thm_base}?fmt=avif&amp;scale=2{layout_query_attr} 2x" type="image/avif">\n        ' if avif_support else ''
+                avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
                 image_tiles += f"""
 <a class="image" href="{qe(image.name)}" title="{esc(image.name)}">
     <picture>
-        {avif_source}<img src="{thm_base}{layout_qs}" srcset="{thm_base}?scale=2{layout_query_attr} 2x" loading="lazy" decoding="async" alt>
+        {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
     </picture>
     <span>{esc(image.name)}</span>
 </a>

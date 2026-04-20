@@ -788,7 +788,6 @@ $justified = !empty($config["interface"]["justified"]);
 			</p>
 		<?php } ?>
 
-		<?php $layout_qs = $justified ? '&amp;layout=j' : ''; ?>
 		<?php if (!$justified) { ?>
 			<div class="grid">
 				<?php foreach($directories as $d) { ?>
@@ -796,10 +795,10 @@ $justified = !empty($config["interface"]["justified"]);
 						<?php $dirthm_base = e($self) . "?dir=" . u($current_dir) . "&amp;dirthm=" . u($d); ?>
 						<picture>
 							<?php if($avif_encode_support): ?>
-							<source srcset="<?= $dirthm_base ?>&amp;fmt=avif<?= $layout_qs ?> 1x, <?= $dirthm_base ?>&amp;fmt=avif&amp;scale=2<?= $layout_qs ?> 2x" type="image/avif">
+							<source srcset="<?= $dirthm_base ?>&amp;fmt=avif 1x, <?= $dirthm_base ?>&amp;fmt=avif&amp;scale=2 2x" type="image/avif">
 							<?php endif; ?>
-							<img src="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?><?= $layout_qs ?>"
-								srcset="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2<?= $layout_qs ?> 2x"
+							<img src="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>"
+								srcset="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2 2x"
 								loading="lazy" decoding="async"
 								width="<?= $config['thumbnails']['size'] ?>"
 								height="<?= $config['thumbnails']['size'] ?>">
@@ -813,10 +812,10 @@ $justified = !empty($config["interface"]["justified"]);
 						<?php $thm_base = e($self) . "?dir=" . u($current_dir) . "&amp;thm=" . u($i); ?>
 						<picture>
 							<?php if($avif_encode_support): ?>
-							<source srcset="<?= $thm_base ?>&amp;fmt=avif<?= $layout_qs ?> 1x, <?= $thm_base ?>&amp;fmt=avif&amp;scale=2<?= $layout_qs ?> 2x" type="image/avif">
+							<source srcset="<?= $thm_base ?>&amp;fmt=avif 1x, <?= $thm_base ?>&amp;fmt=avif&amp;scale=2 2x" type="image/avif">
 							<?php endif; ?>
-							<img src="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?><?= $layout_qs ?>"
-								srcset="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2<?= $layout_qs ?> 2x"
+							<img src="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>"
+								srcset="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2 2x"
 								loading="lazy" decoding="async"
 								width="<?= $config['thumbnails']['size'] ?>"
 								height="<?= $config['thumbnails']['size'] ?>">
@@ -841,10 +840,10 @@ $justified = !empty($config["interface"]["justified"]);
 							<?php $dirthm_base = e($self) . "?dir=" . u($current_dir) . "&amp;dirthm=" . u($d); ?>
 							<picture>
 								<?php if($avif_encode_support): ?>
-								<source srcset="<?= $dirthm_base ?>&amp;fmt=avif<?= $layout_qs ?> 1x, <?= $dirthm_base ?>&amp;fmt=avif&amp;scale=2<?= $layout_qs ?> 2x" type="image/avif">
+								<source srcset="<?= $dirthm_base ?>&amp;fmt=avif 1x, <?= $dirthm_base ?>&amp;fmt=avif&amp;scale=2 2x" type="image/avif">
 								<?php endif; ?>
-								<img src="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?><?= $layout_qs ?>"
-									srcset="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2<?= $layout_qs ?> 2x"
+								<img src="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>"
+									srcset="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2 2x"
 									loading="lazy" decoding="async"
 									width="<?= $config['thumbnails']['size'] ?>"
 									height="<?= $config['thumbnails']['size'] ?>">
@@ -861,10 +860,10 @@ $justified = !empty($config["interface"]["justified"]);
 						<?php $thm_base = e($self) . "?dir=" . u($current_dir) . "&amp;thm=" . u($i); ?>
 						<picture>
 							<?php if($avif_encode_support): ?>
-							<source srcset="<?= $thm_base ?>&amp;fmt=avif<?= $layout_qs ?> 1x, <?= $thm_base ?>&amp;fmt=avif&amp;scale=2<?= $layout_qs ?> 2x" type="image/avif">
+							<source srcset="<?= $thm_base ?>&amp;fmt=avif 1x, <?= $thm_base ?>&amp;fmt=avif&amp;scale=2 2x" type="image/avif">
 							<?php endif; ?>
-							<img src="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?><?= $layout_qs ?>"
-								srcset="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2<?= $layout_qs ?> 2x"
+							<img src="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>"
+								srcset="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2 2x"
 								loading="lazy" decoding="async"
 								height="<?= $config['thumbnails']['size'] ?>">
 						</picture>
