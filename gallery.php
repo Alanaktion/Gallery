@@ -51,6 +51,7 @@ $config = array(
 		"open_in_new_tab" => false,
 		"labels" => true,
 		"labels_only_on_hover" => true,
+		"justified" => false,
 	),
 
 	"thumbnails" => array(
@@ -289,6 +290,9 @@ if(!empty($_GET["thm"])) {
 	}
 
 	$file = build_thumb_cache_key($current_dir, $thm_name);
+	if (!empty($config["interface"]["justified"])) {
+		$file .= "-j";
+	}
 	$scale = get_request_scale($_GET);
 	if ($scale > 1) {
 		$file .= "@{$scale}x";
@@ -327,21 +331,39 @@ function mkthumb(string $src, array $config, string $file, int $scale = 1, strin
 	}
 
 	$size = $config["thumbnails"]["size"] * $scale;
-	$res = imagecreatetruecolor($size, $size);
-	$w = imagecolorallocate($res, 64, 64, 64);
-	imagefill($res, 0, 0, $w);
+	$source_width = imagesx($img);
+	$source_height = imagesy($img);
+	$justified = !empty($config["interface"]["justified"]);
+	if($justified && $source_height > 0) {
+		$target_height = $size;
+		$target_width = max(1, (int) round($source_width * ($target_height / $source_height)));
+		$res = imagecreatetruecolor($target_width, $target_height);
+		$w = imagecolorallocate($res, 64, 64, 64);
+		imagefill($res, 0, 0, $w);
+		imagecopyresampled(
+			$res, $img,
+			0, 0,
+			0, 0,
+			$target_width, $target_height,
+			$source_width, $source_height
+		);
+	} else {
+		$res = imagecreatetruecolor($size, $size);
+		$w = imagecolorallocate($res, 64, 64, 64);
+		imagefill($res, 0, 0, $w);
 
-	// Get smaller of image's dimensions
-	$d = (imagesx($img) > imagesy($img)) ? imagesy($img) : imagesx($img);
+		// Get smaller of image's dimensions
+		$d = ($source_width > $source_height) ? $source_height : $source_width;
 
-	// Crop, resize, and copy from source image
-	imagecopyresampled(
-		$res, $img,
-		0, 0,
-		(imagesx($img) - $d) / 2, (imagesy($img) - $d) / 2,
-		$size, $size,
-		$d, $d
-	);
+		// Crop, resize, and copy from source image
+		imagecopyresampled(
+			$res, $img,
+			0, 0,
+			($source_width - $d) / 2, ($source_height - $d) / 2,
+			$size, $size,
+			$d, $d
+		);
+	}
 
 	// Save/output generated image
 	$ext = ($format === 'jpeg') ? 'jpg' : $format;
@@ -526,6 +548,7 @@ $title = $config["title"];
 if ($current_dir) {
 	$title = basename($dir) . " - " . $config["title"];
 }
+$justified = !empty($config["interface"]["justified"]);
 
 ?>
 <!doctype html>
@@ -647,6 +670,18 @@ if ($current_dir) {
 		color: #777;
 	}
 	.clear {clear: both;}
+	<?php if($justified) { ?>
+		.container {
+			max-width: none !important;
+		}
+		.grid.justified-gallery {
+			display: block !important;
+		}
+		.grid.justified-gallery a.image {
+			float: none;
+			margin: 0;
+		}
+	<?php } ?>
 
 	/* Grid breakpoints */
 <?php $c = 3; ?>
@@ -707,6 +742,11 @@ if ($current_dir) {
 <?php endif; ?>
 </style>
 <?php } ?>
+<?php if($justified) { ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/css/justifiedGallery.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/js/jquery.justifiedGallery.min.js"></script>
+<?php } ?>
 </head>
 <body>
 	<div class="container">
@@ -730,51 +770,116 @@ if ($current_dir) {
 			</p>
 		<?php } ?>
 
-		<div class="grid">
-			<?php foreach($directories as $d) { ?>
-				<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
-					<?php $dirthm_base = e($self) . "?dir=" . u($current_dir) . "&amp;dirthm=" . u($d); ?>
-					<picture>
-						<?php if($avif_encode_support): ?>
-						<source srcset="<?= $dirthm_base ?>&amp;fmt=avif 1x, <?= $dirthm_base ?>&amp;fmt=avif&amp;scale=2 2x" type="image/avif">
-						<?php endif; ?>
-						<img src="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>"
-							srcset="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2 2x"
-							loading="lazy" decoding="async"
-							width="<?= $config['thumbnails']['size'] ?>"
-							height="<?= $config['thumbnails']['size'] ?>">
-					</picture>
-					<span><?= e($d) ?></span>
-				</a>
-			<?php } ?>
+		<?php $layout_qs = $justified ? '&amp;layout=j' : ''; ?>
+		<?php if(!$justified) { ?>
+			<div class="grid">
+				<?php foreach($directories as $d) { ?>
+					<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
+						<?php $dirthm_base = e($self) . "?dir=" . u($current_dir) . "&amp;dirthm=" . u($d); ?>
+						<picture>
+							<?php if($avif_encode_support): ?>
+							<source srcset="<?= $dirthm_base ?>&amp;fmt=avif<?= $layout_qs ?> 1x, <?= $dirthm_base ?>&amp;fmt=avif&amp;scale=2<?= $layout_qs ?> 2x" type="image/avif">
+							<?php endif; ?>
+							<img src="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?><?= $layout_qs ?>"
+								srcset="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2<?= $layout_qs ?> 2x"
+								loading="lazy" decoding="async"
+								width="<?= $config['thumbnails']['size'] ?>"
+								height="<?= $config['thumbnails']['size'] ?>">
+						</picture>
+						<span><?= e($d) ?></span>
+					</a>
+				<?php } ?>
 
-			<?php foreach($images as $i) { ?>
-				<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
-					<?php $thm_base = e($self) . "?dir=" . u($current_dir) . "&amp;thm=" . u($i); ?>
-					<picture>
-						<?php if($avif_encode_support): ?>
-						<source srcset="<?= $thm_base ?>&amp;fmt=avif 1x, <?= $thm_base ?>&amp;fmt=avif&amp;scale=2 2x" type="image/avif">
-						<?php endif; ?>
-						<img src="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>"
-							srcset="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2 2x"
-							loading="lazy" decoding="async"
-							width="<?= $config['thumbnails']['size'] ?>"
-							height="<?= $config['thumbnails']['size'] ?>">
-					</picture>
-					<?php if($config["interface"]["labels"]) { ?>
-						<span><?= e($i) ?></span>
+				<?php foreach($images as $i) { ?>
+					<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+						<?php $thm_base = e($self) . "?dir=" . u($current_dir) . "&amp;thm=" . u($i); ?>
+						<picture>
+							<?php if($avif_encode_support): ?>
+							<source srcset="<?= $thm_base ?>&amp;fmt=avif<?= $layout_qs ?> 1x, <?= $thm_base ?>&amp;fmt=avif&amp;scale=2<?= $layout_qs ?> 2x" type="image/avif">
+							<?php endif; ?>
+							<img src="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?><?= $layout_qs ?>"
+								srcset="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2<?= $layout_qs ?> 2x"
+								loading="lazy" decoding="async"
+								width="<?= $config['thumbnails']['size'] ?>"
+								height="<?= $config['thumbnails']['size'] ?>">
+						</picture>
+						<?php if($config["interface"]["labels"]) { ?>
+							<span><?= e($i) ?></span>
+						<?php } ?>
+					</a>
+				<?php } ?>
+
+				<?php foreach($files as $f) { ?>
+					<a class="file" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($f)) ?>" title="<?= e($f) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+						<span><?= e($f) ?></span>
+					</a>
+				<?php } ?>
+			</div>
+		<?php } else { ?>
+			<?php if(count($directories) > 0) { ?>
+				<div class="grid">
+					<?php foreach($directories as $d) { ?>
+						<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
+							<?php $dirthm_base = e($self) . "?dir=" . u($current_dir) . "&amp;dirthm=" . u($d); ?>
+							<picture>
+								<?php if($avif_encode_support): ?>
+								<source srcset="<?= $dirthm_base ?>&amp;fmt=avif<?= $layout_qs ?> 1x, <?= $dirthm_base ?>&amp;fmt=avif&amp;scale=2<?= $layout_qs ?> 2x" type="image/avif">
+								<?php endif; ?>
+								<img src="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?><?= $layout_qs ?>"
+									srcset="<?= $dirthm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2<?= $layout_qs ?> 2x"
+									loading="lazy" decoding="async"
+									width="<?= $config['thumbnails']['size'] ?>"
+									height="<?= $config['thumbnails']['size'] ?>">
+							</picture>
+							<span><?= e($d) ?></span>
+						</a>
 					<?php } ?>
-				</a>
+				</div>
 			<?php } ?>
 
-			<?php foreach($files as $f) { ?>
-				<a class="file" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($f)) ?>" title="<?= e($f) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
-					<span><?= e($f) ?></span>
-				</a>
+			<div id="justified-grid" class="grid justified-gallery">
+				<?php foreach($images as $i) { ?>
+					<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+						<?php $thm_base = e($self) . "?dir=" . u($current_dir) . "&amp;thm=" . u($i); ?>
+						<picture>
+							<?php if($avif_encode_support): ?>
+							<source srcset="<?= $thm_base ?>&amp;fmt=avif<?= $layout_qs ?> 1x, <?= $thm_base ?>&amp;fmt=avif&amp;scale=2<?= $layout_qs ?> 2x" type="image/avif">
+							<?php endif; ?>
+							<img src="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?><?= $layout_qs ?>"
+								srcset="<?= $thm_base ?><?= $webp_encode_support ? '&amp;fmt=webp' : '' ?>&amp;scale=2<?= $layout_qs ?> 2x"
+								loading="lazy" decoding="async"
+								height="<?= $config['thumbnails']['size'] ?>">
+						</picture>
+						<?php if($config["interface"]["labels"]) { ?>
+							<span><?= e($i) ?></span>
+						<?php } ?>
+					</a>
+				<?php } ?>
+			</div>
+
+			<?php if(count($files) > 0) { ?>
+				<div class="grid">
+					<?php foreach($files as $f) { ?>
+						<a class="file" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($f)) ?>" title="<?= e($f) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
+							<span><?= e($f) ?></span>
+						</a>
+					<?php } ?>
+				</div>
 			<?php } ?>
-		</div>
+		<?php } ?>
 
 		<div class="clear"></div>
+		<?php if($justified) { ?>
+		<script>
+		jQuery(function($) {
+			$('#justified-grid').justifiedGallery({
+				rowHeight: <?= (int) $config['thumbnails']['size'] ?>,
+				margins: 4,
+				lastRow: 'nojustify'
+			});
+		});
+		</script>
+		<?php } ?>
 		<footer><?php echo count($directories) + count($images) + count($files); ?> items</footer>
 	</div>
 </body>

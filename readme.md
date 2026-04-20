@@ -23,6 +23,7 @@ pip3 install Pillow
 ```
 
 Set environment variables or create a `.env` file in the cwd to customize the gallery features. See [.env.example](.env.example) for the defaults.
+Set `GALLERY_JUSTIFIED=true` to enable the justified thumbnail layout.
 
 ### Docker
 

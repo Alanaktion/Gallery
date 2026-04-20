@@ -178,6 +178,29 @@ a.image:focus span {
 }
 """
 
+    if _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')):
+        styles += """
+.container {
+    max-width: none !important;
+}
+.grid.justified-gallery {
+    display: block !important;
+}
+.grid.justified-gallery a.image {
+    float: none;
+    margin: 0;
+}
+@media only screen and (max-width: {MW}px) {
+    .grid.justified-gallery {
+        display: block !important;
+    }
+    .grid.justified-gallery a.image {
+        width: auto;
+        aspect-ratio: auto;
+    }
+}
+""".replace('{MW}', str((size + 6) * 4))
+
     c = 3
     while (size + 6) * c <= 3840:
         styles += """
@@ -285,6 +308,18 @@ def cropped_thumbnail(img: PIL.Image.Image, size):
     result = img.crop((left, top, right, bottom))
     result.thumbnail(size)
     return result
+
+
+def layout_thumbnail(img: PIL.Image.Image, size: int, justified: bool = False):
+    if not justified:
+        return cropped_thumbnail(img, (size, size))
+
+    width, height = img.size
+    if height <= 0:
+        return cropped_thumbnail(img, (size, size))
+
+    target_width = max(1, round(width * (size / height)))
+    return img.resize((target_width, size), PIL.Image.Resampling.LANCZOS)
 
 
 def ffmpeg_thumb(src: str):
@@ -399,6 +434,9 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         global e
         try:
             directories, images, files = self._read_dir(directory)
+            justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false'))
+            layout_qs = '?layout=j' if justified else ''
+            layout_query = '&layout=j' if justified else ''
 
             breadcrumbs = ""
             rel = os.path.relpath(directory, self.directory)
@@ -423,43 +461,73 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     <style type="text/css">
     {css()}
     </style>
+"""
+            if justified:
+                response_content += """
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/css/justifiedGallery.min.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/js/jquery.justifiedGallery.min.js"></script>
+"""
+            response_content += """
 </head>
 <body>
     <div class="container">
-        <div class="grid">{breadcrumbs}"""
+        {breadcrumbs}"""
 
+            dir_tiles = ""
             for d in directories:
                 thm_base = f'/.thm/{qe(rel)}/{qe(d.name)}'
-                avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
-                response_content += f"""
+                avif_source = f'<source srcset="{thm_base}?fmt=avif{layout_query} 1x, {thm_base}?fmt=avif&amp;scale=2{layout_query} 2x" type="image/avif">\n        ' if avif_support else ''
+                dir_tiles += f"""
 <a class="dir" href="{qe(d.name)}" title="{esc(d.name)}">
     <picture>
-        {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
+        {avif_source}<img src="{thm_base}{layout_qs}" srcset="{thm_base}?scale=2{layout_query} 2x" loading="lazy" decoding="async" alt>
     </picture>
     <span>{esc(d.name)}</span>
 </a>
 """
+            image_tiles = ""
             for image in images:
                 thm_base = f'/.thm/{qe(rel)}/{qe(image.name)}'
-                avif_source = f'<source srcset="{thm_base}?fmt=avif 1x, {thm_base}?fmt=avif&amp;scale=2 2x" type="image/avif">\n        ' if avif_support else ''
-                response_content += f"""
+                avif_source = f'<source srcset="{thm_base}?fmt=avif{layout_query} 1x, {thm_base}?fmt=avif&amp;scale=2{layout_query} 2x" type="image/avif">\n        ' if avif_support else ''
+                image_tiles += f"""
 <a class="image" href="{qe(image.name)}" title="{esc(image.name)}">
     <picture>
-        {avif_source}<img src="{thm_base}" srcset="{thm_base}?scale=2 2x" loading="lazy" decoding="async" alt>
+        {avif_source}<img src="{thm_base}{layout_qs}" srcset="{thm_base}?scale=2{layout_query} 2x" loading="lazy" decoding="async" alt>
     </picture>
     <span>{esc(image.name)}</span>
 </a>
 """
 
+            file_tiles = ""
             for file in files:
-                response_content += f"""
+                file_tiles += f"""
 <a class="file" href="{qe(file.name)}" title="{esc(file.name)}">
     <span>{esc(file.name)}</span>
 </a>
 """
 
+            if justified:
+                if dir_tiles:
+                    response_content += f'<div class="grid">{dir_tiles}</div>'
+                response_content += f'<div id="justified-grid" class="grid justified-gallery">{image_tiles}</div>'
+                if file_tiles:
+                    response_content += f'<div class="grid">{file_tiles}</div>'
+                response_content += f"""
+    <script>
+        jQuery(function($) {{
+            $('#justified-grid').justifiedGallery({{
+                rowHeight: {int(os.environ.get('THUMBNAIL_SIZE', '200'))},
+                margins: 4,
+                lastRow: 'nojustify'
+            }});
+        }});
+    </script>
+"""
+            else:
+                response_content += f'<div class="grid">{dir_tiles}{image_tiles}{file_tiles}</div>'
+
             response_content += """
-        </div>
         <div class="clear"></div>
         <footer>{COUNT} items</footer>
     </div>
@@ -482,12 +550,14 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         sha1 = hashlib.sha1(src.encode()).hexdigest()
         suffix = ''
         size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
+        justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false'))
         url = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(url.query)
         if qs.get('scale'):
             scale = int(qs.get('scale', [0])[0])
             suffix = f'@{scale}x'
             size *= scale
+        mode_suffix = '-j' if justified else ''
 
         fmt = 'avif' if (qs.get('fmt', [''])[0] == 'avif' and avif_support) else 'webp'
         mime_type = f'image/{fmt}'
@@ -495,7 +565,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         cachedir = thumb_dir()
         try:
             if cachedir:
-                cachefn = f'{sha1}{suffix}.{fmt}'
+                cachefn = f'{sha1}{mode_suffix}{suffix}.{fmt}'
                 cacheabs = os.path.abspath(f'{cachedir}/{cachefn}')
 
                 if not os.path.isfile(cacheabs):
@@ -512,7 +582,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                             os.unlink(gimg)
                         else:
                             thm = PIL.Image.open(src)
-                        thm = cropped_thumbnail(thm, (size, size))
+                        thm = layout_thumbnail(thm, size, justified)
                         thm.save(cacheabs, fmt, quality=70)
 
                 if cachedir == '.thm':
@@ -536,7 +606,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                         os.unlink(gimg)
                     else:
                         thm = PIL.Image.open(src)
-                    thm = cropped_thumbnail(thm, (size, size))
+                    thm = layout_thumbnail(thm, size, justified)
                     thm.save(target, fmt, quality=70)
 
             self.send_response(200)
