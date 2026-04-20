@@ -190,6 +190,14 @@ a.image:focus span {
     float: none;
     margin: 0;
 }
+.justified-gallery > a > picture > img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
 @media only screen and (max-width: {MW}px) {
     .grid.justified-gallery {
         display: block !important;
@@ -466,9 +474,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
 """
             if justified:
                 response_content += """
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/css/justifiedGallery.min.css">
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/js/jquery.justifiedGallery.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/dist/index.css">
 """
             response_content += """
 </head>
@@ -516,13 +522,13 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if file_tiles:
                     response_content += f'<div class="grid">{file_tiles}</div>'
                 response_content += f"""
-    <script>
-        jQuery(function($) {{
-            $('#justified-grid').justifiedGallery({{
-                rowHeight: {thumb_size},
-                margins: 4,
-                lastRow: 'nojustify'
-            }});
+    <script type="module">
+        import {{ justifiedGallery }} from 'https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/+esm';
+        justifiedGallery('#justified-grid', {{
+            rowHeight: {thumb_size},
+            margins: 4,
+            imgSelector: 'img',
+            captions: false,
         }});
     </script>
 """

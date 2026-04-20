@@ -681,6 +681,14 @@ $justified = !empty($config["interface"]["justified"]);
 			float: none;
 			margin: 0;
 		}
+		.justified-gallery > a > picture > img {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			margin: 0;
+			padding: 0;
+			border: none;
+		}
 	<?php } ?>
 
 	/* Grid breakpoints */
@@ -750,9 +758,7 @@ $justified = !empty($config["interface"]["justified"]);
 </style>
 <?php endif; ?>
 <?php if ($justified) { ?>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/css/justifiedGallery.min.css">
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/js/jquery.justifiedGallery.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/dist/index.css">
 <?php } ?>
 </head>
 <body>
@@ -877,13 +883,13 @@ $justified = !empty($config["interface"]["justified"]);
 
 		<div class="clear"></div>
 		<?php if ($justified) { ?>
-		<script>
-		jQuery(function($) {
-			$('#justified-grid').justifiedGallery({
-				rowHeight: <?= (int) $config['thumbnails']['size'] ?>,
-				margins: 4,
-				lastRow: 'nojustify'
-			});
+		<script type="module">
+		import { justifiedGallery } from 'https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/+esm';
+		justifiedGallery('#justified-grid', {
+			rowHeight: <?= (int) $config['thumbnails']['size'] ?>,
+			margins: 4,
+			imgSelector: 'img',
+			captions: false,
 		});
 		</script>
 		<?php } ?>
