@@ -334,7 +334,7 @@ function mkthumb(string $src, array $config, string $file, int $scale = 1, strin
 	$source_width = imagesx($img);
 	$source_height = imagesy($img);
 	$justified = !empty($config["interface"]["justified"]);
-	if($justified && $source_height > 0) {
+	if ($justified && $source_height > 0) {
 		$target_height = $size;
 		$target_width = max(1, (int) round($source_width * ($target_height / $source_height)));
 		$res = imagecreatetruecolor($target_width, $target_height);
@@ -670,7 +670,7 @@ $justified = !empty($config["interface"]["justified"]);
 		color: #777;
 	}
 	.clear {clear: both;}
-	<?php if($justified) { ?>
+	<?php if ($justified) { ?>
 		.container {
 			max-width: none !important;
 		}
@@ -715,6 +715,13 @@ $justified = !empty($config["interface"]["justified"]);
 		a.file {
 			background-size: 32px 39px;
 		}
+		.grid.justified-gallery {
+			display: block !important;
+		}
+		.grid.justified-gallery a.image {
+			width: auto;
+			aspect-ratio: auto;
+		}
 	}
 </style>
 <?php if(@$config["interface"]["dark"]) { ?>
@@ -742,7 +749,7 @@ $justified = !empty($config["interface"]["justified"]);
 <?php endif; ?>
 </style>
 <?php } ?>
-<?php if($justified) { ?>
+<?php if ($justified) { ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/css/justifiedGallery.min.css">
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.8.1/dist/js/jquery.justifiedGallery.min.js"></script>
@@ -771,7 +778,7 @@ $justified = !empty($config["interface"]["justified"]);
 		<?php } ?>
 
 		<?php $layout_qs = $justified ? '&amp;layout=j' : ''; ?>
-		<?php if(!$justified) { ?>
+		<?php if (!$justified) { ?>
 			<div class="grid">
 				<?php foreach($directories as $d) { ?>
 					<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
@@ -816,7 +823,7 @@ $justified = !empty($config["interface"]["justified"]);
 				<?php } ?>
 			</div>
 		<?php } else { ?>
-			<?php if(count($directories) > 0) { ?>
+			<?php if (count($directories) > 0) { ?>
 				<div class="grid">
 					<?php foreach($directories as $d) { ?>
 						<a class="dir" href="<?= e($self) ?>?dir=<?= u($current_dir . "/" . $d) ?>" title="<?= e($d) ?>">
@@ -857,7 +864,7 @@ $justified = !empty($config["interface"]["justified"]);
 				<?php } ?>
 			</div>
 
-			<?php if(count($files) > 0) { ?>
+			<?php if (count($files) > 0) { ?>
 				<div class="grid">
 					<?php foreach($files as $f) { ?>
 						<a class="file" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($f)) ?>" title="<?= e($f) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
@@ -869,7 +876,7 @@ $justified = !empty($config["interface"]["justified"]);
 		<?php } ?>
 
 		<div class="clear"></div>
-		<?php if($justified) { ?>
+		<?php if ($justified) { ?>
 		<script>
 		jQuery(function($) {
 			$('#justified-grid').justifiedGallery({
