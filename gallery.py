@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import PIL.Image
 import urllib.parse
@@ -54,6 +55,10 @@ def _env_bool(value: str):
 
 def qe(val: str):
     return esc(urllib.parse.quote(val))
+
+
+def _split_csv(value: str) -> list[str]:
+    return [part.strip() for part in value.split(',') if part.strip()]
 
 
 def css():
@@ -304,6 +309,171 @@ def thumb_dir():
         return '.thm'
 
 
+def _pregenerate_target_paths(spec: str, root_dir: str) -> list[str]:
+    norm = spec.strip()
+    if not norm:
+        return []
+
+    # Boolean true means: recursively generate for the entire gallery directory.
+    parsed = _env_bool(norm)
+    if parsed is True:
+        return [root_dir]
+    if parsed is False:
+        return []
+
+    targets = []
+    for raw in _split_csv(norm):
+        candidate = os.path.abspath(os.path.join(root_dir, os.path.expanduser(raw)))
+        if os.path.commonpath([candidate, root_dir]) != root_dir:
+            continue
+        if os.path.exists(candidate):
+            targets.append(candidate)
+    return targets
+
+
+def _iter_pregenerate_dirs(path: str):
+    if os.path.isdir(path):
+        for root, dirs, _ in os.walk(path):
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            yield root
+
+
+def _save_directory_thumbnail(directory: str, cacheabs: str, size: int, fmt: str, image_exts: set[str]):
+    if os.path.exists(cacheabs):
+        return
+
+    os.makedirs(os.path.dirname(cacheabs), exist_ok=True)
+    thm = PIL.Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    count = 0
+    with os.scandir(directory) as entries:
+        for entry in sorteddir([e for e in entries if not e.name.startswith('.') and e.is_file()]):
+            ext = entry.name.rpartition('.')[2].lower()
+            if ext not in image_exts:
+                continue
+            try:
+                with PIL.Image.open(entry.path) as sub:
+                    sub = cropped_thumbnail(sub, (size // 2, size // 2))
+                    x = count % 2 * size // 2
+                    y = (count // 2) * (size // 2)
+                    thm.paste(sub, (x, y))
+                    count += 1
+                    if count >= 4:
+                        break
+            except Exception:
+                continue
+    thm.save(cacheabs, fmt, quality=70)
+
+
+def _iter_pregenerate_files(path: str, image_exts: set[str]):
+    if os.path.isfile(path):
+        if path.rpartition('.')[2].lower() in image_exts:
+            yield path
+        return
+
+    if os.path.isdir(path):
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            for name in files:
+                if name.startswith('.'):
+                    continue
+                ext = name.rpartition('.')[2].lower()
+                if ext in image_exts:
+                    yield os.path.join(root, name)
+
+
+def _save_thumbnail_variant(src: str, cacheabs: str, size: int, justified: bool, fmt: str):
+    if os.path.exists(cacheabs):
+        return
+
+    os.makedirs(os.path.dirname(cacheabs), exist_ok=True)
+    if src.endswith(('.mp4', '.m4v', '.webm')):
+        vimg = ffmpeg_thumb(src)
+        try:
+            thm = PIL.Image.open(vimg)
+            thm = layout_thumbnail(thm, size, justified)
+            thm.save(cacheabs, fmt, quality=70)
+        finally:
+            if os.path.exists(vimg):
+                os.unlink(vimg)
+    elif src.lower().endswith(('.gltf', '.glb')):
+        gimg = gltf_thumb(src)
+        try:
+            thm = PIL.Image.open(gimg)
+            thm = layout_thumbnail(thm, size, justified)
+            thm.save(cacheabs, fmt, quality=70)
+        finally:
+            if os.path.exists(gimg):
+                os.unlink(gimg)
+    else:
+        with PIL.Image.open(src) as thm:
+            thm = layout_thumbnail(thm, size, justified)
+            thm.save(cacheabs, fmt, quality=70)
+
+
+def pregenerate_thumbnails():
+    spec = os.environ.get('GALLERY_PREGENERATE_THUMBNAILS', '').strip()
+    if not spec:
+        return
+
+    cachedir = thumb_dir()
+    if not cachedir:
+        return
+
+    root_dir = os.path.abspath(os.path.expanduser(os.environ.get('GALLERY_DIRECTORY', '.')))
+    targets = _pregenerate_target_paths(spec, root_dir)
+    if not targets:
+        return
+
+    img_exts = {'jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'bmp', 'webp'}
+    if heif_support:
+        img_exts.update({'heif', 'heic'})
+    if avif_support:
+        img_exts.add('avif')
+    if ffmpeg:
+        img_exts.update({'mp4', 'm4v', 'webm'})
+    if gltf_viewer:
+        img_exts.update({'gltf', 'glb'})
+
+    image_exts = set(_split_csv(os.environ.get('IMAGE_EXTS', ','.join(sorted(img_exts)))))
+    size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
+    justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')) is True
+    mode_suffix = '-j' if justified else ''
+
+    for target in targets:
+        for directory in _iter_pregenerate_dirs(target):
+            sha1 = hashlib.sha1(directory.encode()).hexdigest()
+            webp_cache = os.path.abspath(f'{cachedir}/{sha1}{mode_suffix}.webp')
+            try:
+                _save_directory_thumbnail(directory, webp_cache, size, 'webp', image_exts)
+                if avif_support:
+                    avif_cache = os.path.abspath(f'{cachedir}/{sha1}{mode_suffix}.avif')
+                    _save_directory_thumbnail(directory, avif_cache, size, 'avif', image_exts)
+            except Exception:
+                continue
+
+        for src in _iter_pregenerate_files(target, image_exts):
+            sha1 = hashlib.sha1(src.encode()).hexdigest()
+            webp_cache = os.path.abspath(f'{cachedir}/{sha1}{mode_suffix}.webp')
+            try:
+                _save_thumbnail_variant(src, webp_cache, size, justified, 'webp')
+                if avif_support:
+                    avif_cache = os.path.abspath(f'{cachedir}/{sha1}{mode_suffix}.avif')
+                    _save_thumbnail_variant(src, avif_cache, size, justified, 'avif')
+            except Exception:
+                continue
+
+
+def maybe_start_pregenerate_subprocess():
+    spec = os.environ.get('GALLERY_PREGENERATE_THUMBNAILS', '').strip()
+    if not spec:
+        return
+    if _env_bool(spec) is False:
+        return
+
+    cmd = [sys.executable, os.path.abspath(__file__), '--pregenerate-run']
+    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def cropped_thumbnail(img: PIL.Image.Image, size):
     width, height = img.size
     smaller_side = min(width, height)
@@ -452,7 +622,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         global e
         try:
             directories, images, files = self._read_dir(directory)
-            justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false'))
+            justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')) is True
             thumb_size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
 
             breadcrumbs = ""
@@ -565,7 +735,7 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         sha1 = hashlib.sha1(src.encode()).hexdigest()
         suffix = ''
         size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
-        justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false'))
+        justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')) is True
         url = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(url.query)
         if qs.get('scale'):
@@ -661,6 +831,13 @@ def args_to_env():
     parser.add_argument('--address')
     parser.add_argument('-p', '--port', type=int)
     parser.add_argument('-d', '--directory')
+    parser.add_argument(
+        '--pregenerate-thumbnails',
+        nargs='?',
+        const='true',
+        help='pre-generate thumbnails recursively in a subprocess; true=all, or pass csv paths',
+    )
+    parser.add_argument('--pregenerate-run', action='store_true', help=argparse.SUPPRESS)
 
     args = parser.parse_args()
     if args.address:
@@ -669,10 +846,20 @@ def args_to_env():
         os.environ['GALLERY_PORT'] = str(args.port)
     if args.directory:
         os.environ['GALLERY_DIRECTORY'] = args.directory
+    if args.pregenerate_thumbnails is not None:
+        os.environ['GALLERY_PREGENERATE_THUMBNAILS'] = args.pregenerate_thumbnails
+    if args.pregenerate_run:
+        os.environ['GALLERY_PREGENERATE_RUN'] = 'true'
 
 
 def main():
     args_to_env()
+
+    if _env_bool(os.environ.get('GALLERY_PREGENERATE_RUN', 'false')):
+        pregenerate_thumbnails()
+        return
+
+    maybe_start_pregenerate_subprocess()
     directory = os.path.expanduser(os.environ.get('GALLERY_DIRECTORY', '.'))
 
     class GalleryServer(http.server.ThreadingHTTPServer):

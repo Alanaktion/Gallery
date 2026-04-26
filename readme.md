@@ -12,6 +12,11 @@ This application requires the GD library for generation of thumbnails.
 
 Run the `gallery.py` file with Python. Use `-d` to specify a directory other than cwd to list images from, `-p` to specify which TCP port to listen on.
 
+Use `--pregenerate-thumbnails` to start a subprocess that recursively pre-generates thumbnails in the background.
+
+- `--pregenerate-thumbnails` (or `--pregenerate-thumbnails=true`): generate for the entire gallery directory
+- `--pregenerate-thumbnails=path1,path2`: generate only for the listed paths (relative to the gallery root)
+
 ```bash
 python3 gallery.py -d ~/Pictures/
 ```
@@ -24,6 +29,7 @@ pip3 install Pillow
 
 Set environment variables or create a `.env` file in the cwd to customize the gallery features. See [.env.example](.env.example) for the defaults.
 Set `GALLERY_JUSTIFIED=true` to enable the justified thumbnail layout.
+Set `GALLERY_PREGENERATE_THUMBNAILS=true` to pre-generate recursively for everything, or set a comma-separated path list like `GALLERY_PREGENERATE_THUMBNAILS=Trips,Family/2024`.
 
 ### Docker
 
