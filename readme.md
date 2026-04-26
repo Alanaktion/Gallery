@@ -71,6 +71,11 @@ volumes:
 
 ### Changelog
 
+0.9.1
+
+- Use AVIF thumbnails (where supported)
+- Pre-generate thumbnails (Python only)
+
 0.9.0
 
 - 3D model support (glTF, GLB, OBJ, STL) with thumbnail generation via Filament's `gltf_viewer --batch`

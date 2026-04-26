@@ -1,6 +1,6 @@
 <?php
 /**
- * Gallery 0.6.3
+ * Gallery 0.9.1
  * The ultimate single-file photo gallery
  * @author Alan Hardman <alan@phpizza.com>
  */
