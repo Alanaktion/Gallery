@@ -679,20 +679,24 @@ $justified = !empty($config["interface"]["justified"]);
 		.container {
 			max-width: none !important;
 		}
-		.grid.justified-gallery {
-			display: block !important;
+		.justified-gallery:has(.jg-entry:not(.jg-entry-visible)) {
+			min-height: 100vh;
 		}
-		.grid.justified-gallery a.image {
-			float: none;
-			margin: 0;
-		}
-		.justified-gallery > a > picture > img {
+		.justified-gallery > a.jg-entry-visible > picture > img {
 			position: absolute;
 			top: 50%;
 			left: 50%;
 			margin: 0;
 			padding: 0;
 			border: none;
+		}
+		.justified-gallery > a:not(.jg-entry-visible) {
+			position: relative !important;
+			opacity: 1 !important;
+		}
+		.justified-gallery > .jg-entry-visible > picture > img {
+			opacity: 1;
+			transition: opacity 500ms ease-in;
 		}
 	<?php } ?>
 
@@ -727,13 +731,6 @@ $justified = !empty($config["interface"]["justified"]);
 		}
 		a.file {
 			background-size: 32px 39px;
-		}
-		.grid.justified-gallery {
-			display: block !important;
-		}
-		.grid.justified-gallery a.image {
-			width: auto;
-			aspect-ratio: auto;
 		}
 	}
 </style>
@@ -854,7 +851,7 @@ $justified = !empty($config["interface"]["justified"]);
 				</div>
 			<?php } ?>
 
-			<div id="justified-grid" class="grid justified-gallery">
+			<div class="grid" id="jg-queue">
 				<?php foreach($images as $i) { ?>
 					<a class="image" href="<?= e(rawurlencode($dir)) . "/" . e(rawurlencode($i)) ?>" title="<?= e($i) ?>" target="<?php if(!empty($config['interface']['open_in_new_tab'])) echo '_blank'; ?>">
 						<?php $thm_base = e($self) . "?dir=" . u($current_dir) . "&amp;thm=" . u($i); ?>
@@ -889,12 +886,35 @@ $justified = !empty($config["interface"]["justified"]);
 		<?php if ($justified) { ?>
 		<script type="module">
 		import { justifiedGallery } from 'https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/+esm';
-		justifiedGallery('#justified-grid', {
-			rowHeight: <?= (int) $config['thumbnails']['size'] ?>,
-			margins: 4,
-			imgSelector: 'img',
-			captions: false,
-		});
+		const queue = document.getElementById('jg-queue');
+		const minWidth = <?= (int) (($config['thumbnails']['size'] + 6) * 4) ?>;
+		if (queue && window.matchMedia('(min-width: ' + minWidth + 'px)').matches) {
+			const jgEl = document.createElement('div');
+			jgEl.className = 'justified-gallery';
+			queue.parentNode.insertBefore(jgEl, queue);
+			const jg = justifiedGallery(jgEl, {
+				rowHeight: <?= (int) $config['thumbnails']['size'] ?>,
+				margins: 4,
+				imgSelector: 'img',
+				captions: false,
+			});
+			const observer = new IntersectionObserver((entries) => {
+				let added = false;
+				for (const entry of entries) {
+					if (entry.isIntersecting) {
+						observer.unobserve(entry.target);
+						const img = entry.target.querySelector('img');
+						if (img) img.removeAttribute('loading');
+						jgEl.appendChild(entry.target);
+						added = true;
+					}
+				}
+				if (added) jg.addEntries();
+			}, { rootMargin: '400px 0px 0px 0px' });
+			for (const el of queue.querySelectorAll('a.image')) {
+				observer.observe(el);
+			}
+		}
 		</script>
 		<?php } ?>
 		<footer><?php echo count($directories) + count($images) + count($files); ?> items</footer>

@@ -188,14 +188,10 @@ a.image:focus span {
 .container {
     max-width: none !important;
 }
-.grid.justified-gallery {
-    display: block !important;
+.justified-gallery:has(.jg-entry:not(.jg-entry-visible)) {
+    min-height: 100vh;
 }
-.grid.justified-gallery a.image {
-    float: none;
-    margin: 0;
-}
-.justified-gallery > a > picture > img {
+.justified-gallery > a.jg-entry-visible > picture > img {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -203,16 +199,15 @@ a.image:focus span {
     padding: 0;
     border: none;
 }
-@media only screen and (max-width: {MW}px) {
-    .grid.justified-gallery {
-        display: block !important;
-    }
-    .grid.justified-gallery a.image {
-        width: auto;
-        aspect-ratio: auto;
-    }
+.justified-gallery > a:not(.jg-entry-visible) {
+    position: relative !important;
+    opacity: 1 !important;
 }
-""".replace('{MW}', str((size + 6) * 4))
+.justified-gallery > .jg-entry-visible > picture > img {
+    opacity: 1;
+    transition: opacity 500ms ease-in;
+}
+"""
 
     c = 3
     while (size + 6) * c <= 3840:
@@ -693,20 +688,43 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
 """
 
             if justified:
+                min_width = (thumb_size + 6) * 4
                 if dir_tiles:
                     response_content += f'<div class="grid">{dir_tiles}</div>'
-                response_content += f'<div id="justified-grid" class="grid justified-gallery">{image_tiles}</div>'
+                response_content += f'<div class="grid" id="jg-queue">{image_tiles}</div>'
                 if file_tiles:
                     response_content += f'<div class="grid">{file_tiles}</div>'
                 response_content += f"""
     <script type="module">
         import {{ justifiedGallery }} from 'https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/+esm';
-        justifiedGallery('#justified-grid', {{
-            rowHeight: {thumb_size},
-            margins: 4,
-            imgSelector: 'img',
-            captions: false,
-        }});
+        const queue = document.getElementById('jg-queue');
+        if (queue && window.matchMedia('(min-width: {min_width}px)').matches) {{
+            const jgEl = document.createElement('div');
+            jgEl.className = 'justified-gallery';
+            queue.parentNode.insertBefore(jgEl, queue);
+            const jg = justifiedGallery(jgEl, {{
+                rowHeight: {thumb_size},
+                margins: 4,
+                imgSelector: 'img',
+                captions: false,
+            }});
+            const observer = new IntersectionObserver((entries) => {{
+                let added = false;
+                for (const entry of entries) {{
+                    if (entry.isIntersecting) {{
+                        observer.unobserve(entry.target);
+                        const img = entry.target.querySelector('img');
+                        if (img) img.removeAttribute('loading');
+                        jgEl.appendChild(entry.target);
+                        added = true;
+                    }}
+                }}
+                if (added) jg.addEntries();
+            }}, {{ rootMargin: '400px 0px 0px 0px' }});
+            for (const el of queue.querySelectorAll('a.image')) {{
+                observer.observe(el);
+            }}
+        }}
     </script>
 """
             else:
