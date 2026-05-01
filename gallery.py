@@ -188,6 +188,9 @@ a.image:focus span {
 .container {
     max-width: none !important;
 }
+.jg-entry:not(.jg-entry-visible) {
+    position: static !important;
+}
 .justified-gallery:has(.jg-entry:not(.jg-entry-visible)) {
     min-height: 100vh;
 }
@@ -699,6 +702,8 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         import {{ justifiedGallery }} from 'https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/+esm';
         const queue = document.getElementById('jg-queue');
         if (queue && window.matchMedia('(min-width: {min_width}px)').matches) {{
+            queue.style.opacity = '0';
+            queue.style.pointerEvents = 'none';
             const jgEl = document.createElement('div');
             jgEl.className = 'justified-gallery';
             queue.parentNode.insertBefore(jgEl, queue);

@@ -679,6 +679,9 @@ $justified = !empty($config["interface"]["justified"]);
 		.container {
 			max-width: none !important;
 		}
+		.jg-entry:not(.jg-entry-visible) {
+			position: static !important;
+		}
 		.justified-gallery:has(.jg-entry:not(.jg-entry-visible)) {
 			min-height: 100vh;
 		}
@@ -889,6 +892,8 @@ $justified = !empty($config["interface"]["justified"]);
 		const queue = document.getElementById('jg-queue');
 		const minWidth = <?= (int) (($config['thumbnails']['size'] + 6) * 4) ?>;
 		if (queue && window.matchMedia('(min-width: ' + minWidth + 'px)').matches) {
+			queue.style.opacity = '0';
+			queue.style.pointerEvents = 'none';
 			const jgEl = document.createElement('div');
 			jgEl.className = 'justified-gallery';
 			queue.parentNode.insertBefore(jgEl, queue);
