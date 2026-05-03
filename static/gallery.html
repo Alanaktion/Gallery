@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review</title>
+  <link rel="stylesheet" href="/static/gallery.css">
+</head>
+<body>
+
+<div id="browse">
+  <div class="toolbar">
+    <nav class="breadcrumb" id="breadcrumb" aria-label="Directory path"></nav>
+    <button class="danger-btn" id="btn-empty-trash" style="display:none" title="Permanently delete all files in the trash folder">🗑 Empty Trash</button>
+    <button class="danger-btn" id="btn-empty-nonfavs" style="display:none" title="Permanently delete all files in this folder that are not in fav">✂ Keep Favs Only</button>
+    <button class="danger-btn" id="btn-delete-dir" style="display:none" title="Permanently delete this entire directory and navigate up">🗑 Delete Directory</button>
+    <div class="view-btns">
+      <button class="view-btn" id="btn-grid-view" title="Grid view" aria-label="Grid view">⊞</button>
+      <button class="view-btn" id="btn-list-view" title="List view" aria-label="List view">≡</button>
+    </div>
+  </div>
+  <div id="media-container"></div>
+</div>
+
+<div id="fullscreen" role="dialog" aria-modal="true">
+  <img id="fs-img" src="" alt="" style="display:none">
+  <video id="fs-vid" autoplay controls style="display:none"></video>
+  <button class="nav-btn" id="btn-prev" aria-label="Previous">&#8249;</button>
+  <button class="nav-btn" id="btn-next" aria-label="Next">&#8250;</button>
+  <div class="fs-bar">
+    <div class="fs-info">
+      <span id="fs-name"></span>
+      <span id="fs-counter"></span>
+    </div>
+    <div class="fs-actions">
+      <button class="act-btn" id="btn-fit">⊡</button>
+      <button class="act-btn" id="btn-fav">★</button>
+      <button class="act-btn" id="btn-del">🗑</button>
+      <button class="act-btn" id="btn-close">✕</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/gallery.js"></script>
+</body>
+</html>

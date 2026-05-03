@@ -1,0 +1,12 @@
+services:
+  review:
+    image: ghcr.io/alanaktion/gallery:review
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    user: 1000:1000
+    volumes:
+      - /home/example/Pictures:/files/Pictures
+    ports:
+      - 8000:8000
