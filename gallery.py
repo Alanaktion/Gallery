@@ -91,7 +91,7 @@ def safe_dest_dir(parent: Path, name: str) -> Path | None:
 # ---------------------------------------------------------------------------
 
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):
+    def log_message(self, format, *args):
         pass  # suppress default access log
 
     def send_json(self, data: dict, status: int = 200) -> None:
