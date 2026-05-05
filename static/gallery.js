@@ -408,6 +408,13 @@ fsEl.addEventListener('touchstart', showControls, { passive: true });
 // ── Keyboard shortcuts ────────────────────────────────────────
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Backspace' && fsEl.style.display !== 'block' && dirPath !== '') {
+    const parentPath = dirPath.includes('/') ? dirPath.slice(0, dirPath.lastIndexOf('/')) : '';
+    navigate(parentPath);
+    e.preventDefault();
+    return;
+  }
+
   if (fsEl.style.display !== 'block') return;
   // Don't hijack keys when the video element itself has focus (user may be seeking)
   if (document.activeElement === document.getElementById('fs-vid')) return;

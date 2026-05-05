@@ -21,7 +21,8 @@ STATIC_DIR: Path = Path(__file__).parent / 'static'
 
 
 def natural_key(s: str) -> list:
-    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
+    return [int(c) if c.isdigit() else c.lower()
+            for c in re.split(r'(\d+)', s)]
 
 
 def media_type(name: str) -> str:
@@ -29,7 +30,7 @@ def media_type(name: str) -> str:
 
 
 def validate_rel_path(s: str) -> bool:
-    """Return True if s is a safe relative path (no traversal, no backslash)."""
+    """Return True if s is a safe relative path (no traversal/backslash)."""
     if not isinstance(s, str):
         return False
     if s == '':
@@ -83,7 +84,6 @@ def safe_dest_dir(parent: Path, name: str) -> Path | None:
     except ValueError:
         return None
     return d
-
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +214,12 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
-    def _serve_range(self, path: Path, mime: str, size: int, spec: str) -> None:
+    def _serve_range(
+            self,
+            path: Path,
+            mime: str,
+            size: int,
+            spec: str) -> None:
         m = re.match(r'^(\d*)-(\d*)$', spec)
         if not m:
             self.send_response(416)
@@ -291,9 +296,13 @@ class Handler(BaseHTTPRequestHandler):
             key=natural_key,
         )
         fav_dirs = [
-            d for d in dirs
-            if (abs_path / d / 'fav').is_dir() and not (abs_path / d / 'fav').is_symlink()
-        ]
+            d for d in dirs if (
+                abs_path /
+                d /
+                'fav').is_dir() and not (
+                abs_path /
+                d /
+                'fav').is_symlink()]
         self.send_json({
             'dirs': dirs,
             'fav_dirs': fav_dirs,
@@ -399,7 +408,8 @@ class Handler(BaseHTTPRequestHandler):
             self.err_json('directory not found', 404)
             return
 
-        # Refuse to delete root or a dir that has trash/fav (use other endpoints instead)
+        # Refuse to delete root or a dir that has trash/fav (use other
+        # endpoints instead)
         if abs_dir == ROOT:
             self.err_json('cannot delete root', 400)
             return
@@ -423,10 +433,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Lightweight image/video gallery server.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='Examples:\n  gallery.py\n  gallery.py ~/Photos\n  gallery.py ~/Photos -p 9000',
     )
-    parser.add_argument('root', nargs='?', default='.', metavar='PATH',
-                        help='Root media directory (default: current directory)')
+    parser.add_argument(
+        'root',
+        nargs='?',
+        default='.',
+        metavar='PATH',
+        help='Root media directory (default: current directory)')
     parser.add_argument('-p', '--port', type=int, default=8000, metavar='PORT',
                         help='Port to listen on (default: 8000)')
     parser.add_argument('--host', default='127.0.0.1', metavar='HOST',
