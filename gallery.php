@@ -694,8 +694,9 @@ $justified = !empty($config["interface"]["justified"]);
 			border: none;
 		}
 		.justified-gallery > a:not(.jg-entry-visible) {
-			position: relative !important;
+			position: absolute !important;
 			opacity: 1 !important;
+			bottom: 0;
 		}
 		.justified-gallery > .jg-entry-visible > picture > img {
 			opacity: 1;
