@@ -6,6 +6,7 @@ let mediaIdx = 0;       // index of current fullscreen item
 let navToken = 0;       // guards against stale navigate() responses
 let browseModified = false;  // true when a fav/delete happened in fullscreen
 let savedScrollY = 0;
+let fsHistoryPushed = false; // true when a fullscreen history entry is on the stack
 
 // Persist view mode and fit mode
 let viewMode = localStorage.getItem('galleryView') || 'grid';
@@ -316,12 +317,16 @@ function renderList(data, container) {
 
 // ── Fullscreen viewer ───────────────────────────────────────
 
-function openFS(idx) {
+function openFS(idx, pushHistory = true) {
   savedScrollY = window.scrollY;
   mediaIdx = idx;
   document.getElementById('fullscreen').style.display = 'block';
   document.getElementById('browse').style.display = 'none';
   document.getElementById('btn-close').focus();
+  if (pushHistory) {
+    history.pushState({ path: dirPath, fullscreen: true, mediaIdx: idx }, '');
+  }
+  fsHistoryPushed = true;
   updateFSMedia();
 }
 
@@ -333,15 +338,29 @@ function stopVideo() {
   vid.style.display = 'none';
 }
 
-function closeFS() {
+function closeFSUI() {
   stopVideo();
   showControls();
   document.getElementById('fs-img').style.display = 'none';
   document.getElementById('fs-img').src = '';
   document.getElementById('fullscreen').style.display = 'none';
   document.getElementById('browse').style.display = 'block';
+}
 
-  if (browseModified) {
+function closeFS(fromPopstate = false) {
+  if (fsHistoryPushed && !fromPopstate) {
+    // Let history.back() fire popstate, which calls closeFS(true) for real teardown
+    fsHistoryPushed = false;
+    history.back();
+    return;
+  }
+  fsHistoryPushed = false;
+  closeFSUI();
+  if (fromPopstate) {
+    // The popstate handler will call navigate() which handles any needed refresh
+    browseModified = false;
+    window.scrollTo(0, savedScrollY);
+  } else if (browseModified) {
     browseModified = false;
     navigate(dirPath, 'replace').then(() => window.scrollTo(0, savedScrollY));
   } else {
@@ -372,6 +391,9 @@ function updateFSMedia() {
     (mediaIdx + 1) + ' / ' + dirMedia.length;
   document.getElementById('btn-prev').disabled = mediaIdx === 0;
   document.getElementById('btn-next').disabled = mediaIdx === dirMedia.length - 1;
+  if (fsHistoryPushed) {
+    history.replaceState({ path: dirPath, fullscreen: true, mediaIdx }, '');
+  }
 }
 
 function removeCurrentAndAdvance() {
@@ -416,22 +438,45 @@ document.addEventListener('keydown', e => {
   }
 
   if (fsEl.style.display !== 'block') return;
-  // Don't hijack keys when the video element itself has focus (user may be seeking)
-  if (document.activeElement === document.getElementById('fs-vid')) return;
 
+  const vid = document.getElementById('fs-vid');
+  const isVideo = vid.style.display === 'block';
   let handled = false;
-  if (e.key === 'ArrowLeft' && mediaIdx > 0) {
-    mediaIdx--; updateFSMedia(); handled = true;
-  } else if (e.key === 'ArrowRight' && mediaIdx < dirMedia.length - 1) {
-    mediaIdx++; updateFSMedia(); handled = true;
-  } else if (e.key === 'Escape') {
-    closeFS(); handled = true;
-  } else if (e.key === 'f' || e.key === 'F') {
-    document.getElementById('btn-fav').click(); handled = true;
-  } else if (e.key === 'Delete' || e.key === 'd' || e.key === 'D') {
-    document.getElementById('btn-del').click(); handled = true;
-  } else if (e.key === 'z' || e.key === 'Z') {
-    toggleFitMode(); handled = true;
+  let isVideoShortcut = false;
+
+  // Video-specific shortcuts (active whenever a video is open)
+  if (isVideo) {
+    if (e.key === ' ' || e.key === 'p' || e.key === 'P') {
+      vid.paused ? vid.play() : vid.pause();
+      handled = true; isVideoShortcut = true;
+    } else if (e.key === 'j' || e.key === 'J') {
+      vid.currentTime = Math.max(0, vid.currentTime - 10);
+      handled = true; isVideoShortcut = true;
+    } else if (e.key === 'k' || e.key === 'K') {
+      vid.currentTime = Math.min(vid.duration || Infinity, vid.currentTime + 10);
+      handled = true; isVideoShortcut = true;
+    } else if (e.key === 'l' || e.key === 'L') {
+      vid.loop = !vid.loop;
+      showToast(vid.loop ? '🔁 Loop on' : '🔁 Loop off');
+      handled = true; isVideoShortcut = true;
+    }
+  }
+
+  // Global fullscreen shortcuts
+  if (!handled) {
+    if (e.key === 'ArrowLeft' && mediaIdx > 0) {
+      mediaIdx--; updateFSMedia(); handled = true;
+    } else if (e.key === 'ArrowRight' && mediaIdx < dirMedia.length - 1) {
+      mediaIdx++; updateFSMedia(); handled = true;
+    } else if (e.key === 'Escape') {
+      closeFS(); handled = true;
+    } else if (e.key === 'f' || e.key === 'F') {
+      document.getElementById('btn-fav').click(); handled = true;
+    } else if (e.key === 'Delete' || e.key === 'd' || e.key === 'D') {
+      document.getElementById('btn-del').click(); handled = true;
+    } else if (e.key === 'z' || e.key === 'Z') {
+      toggleFitMode(); handled = true;
+    }
   }
 
   if (handled) {
@@ -541,9 +586,24 @@ function showToast(msg) {
 
 // ── Boot ─────────────────────────────────────────────────────
 window.addEventListener('popstate', e => {
-  const path = (e.state && e.state.path != null)
-    ? e.state.path
+  const state = e.state || {};
+
+  if (state.fullscreen) {
+    // Forward navigation back to a fullscreen state — restore only if dir still matches
+    if (state.path === dirPath && state.mediaIdx < dirMedia.length) {
+      openFS(state.mediaIdx, false);
+    } else {
+      navigate(state.path || '', 'none');
+    }
+    return;
+  }
+
+  const path = state.path != null
+    ? state.path
     : (new URLSearchParams(location.search).get('path') ?? '');
+  if (fsEl.style.display === 'block') {
+    closeFS(true);
+  }
   navigate(path, 'none');
 });
 
