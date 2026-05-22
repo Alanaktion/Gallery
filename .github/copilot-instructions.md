@@ -36,7 +36,8 @@ Configuration is via environment variables or a `.env` file in the cwd. See `.en
 
 Optional system tools extend functionality when on `PATH`:
 - **`ffmpeg`** — enables video thumbnail generation (mp4, m4v, webm)
-- **`gltf_viewer`** — enables 3D model thumbnails (glTF, GLB); OBJ/STL are listed without thumbnails
+- **`stl-thumb`** — enables 3D model thumbnails (3MF, OBJ, STL)
+- **`gltf_viewer`** — enables 3D model thumbnails (glTF, GLB)
 
 ## Configuration (PHP)
 
@@ -64,7 +65,7 @@ The PHP implementation explicitly protects against path traversal:
 Two Docker variants, both published to `ghcr.io/alanaktion/gallery`:
 
 - `latest` — built from `Dockerfile`, standard Python + ffmpeg + HEIF
-- `gltf` — built from `Dockerfile.gltf`, adds Filament's `gltf_viewer` for 3D model rendering
+- `gltf` — built from `Dockerfile.gltf`, adds `stl-thumb` and Filament's `gltf_viewer` for 3D model rendering
 
 CI pushes both tags on every push to `master` via `.github/workflows/docker.yml` (builds for Docker Hub and GHCR simultaneously).
 

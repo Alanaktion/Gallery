@@ -12,6 +12,7 @@ import tempfile
 import PIL.Image
 import urllib.parse
 
+from contextlib import contextmanager
 from html import escape as esc
 try:
     from dotenv import load_dotenv
@@ -28,6 +29,7 @@ except ImportError:
 
 ffmpeg = os.environ.get('FFMPEG_PATH', shutil.which('ffmpeg'))
 gltf_viewer = os.environ.get('GLTF_VIEWER_PATH', shutil.which('gltf_viewer'))
+stl_thumb = os.environ.get('STL_THUMB_PATH', shutil.which('stl-thumb'))
 
 
 def _check_avif_support():
@@ -39,6 +41,10 @@ def _check_avif_support():
         return False
 
 avif_support = _check_avif_support()
+
+VIDEO_EXTS = ('.mp4', '.m4v', '.webm')
+STL_THUMB_MODEL_EXTS = ('.3mf', '.obj', '.stl')
+GLTF_VIEWER_MODEL_EXTS = ('.gltf', '.glb')
 
 # Ensure AVIF MIME type is registered for SimpleHTTPRequestHandler to serve correctly
 mimetypes.add_type('image/avif', '.avif')
@@ -350,7 +356,7 @@ def _save_directory_thumbnail(directory: str, cacheabs: str, size: int, fmt: str
             if ext not in image_exts:
                 continue
             try:
-                with PIL.Image.open(entry.path) as sub:
+                with thumbnail_source_image(entry.path, size) as sub:
                     sub = cropped_thumbnail(sub, (size // 2, size // 2))
                     x = count % 2 * size // 2
                     y = (count // 2) * (size // 2)
@@ -385,28 +391,9 @@ def _save_thumbnail_variant(src: str, cacheabs: str, size: int, justified: bool,
         return
 
     os.makedirs(os.path.dirname(cacheabs), exist_ok=True)
-    if src.endswith(('.mp4', '.m4v', '.webm')):
-        vimg = ffmpeg_thumb(src)
-        try:
-            thm = PIL.Image.open(vimg)
-            thm = layout_thumbnail(thm, size, justified)
-            thm.save(cacheabs, fmt, quality=70)
-        finally:
-            if os.path.exists(vimg):
-                os.unlink(vimg)
-    elif src.lower().endswith(('.gltf', '.glb')):
-        gimg = gltf_thumb(src)
-        try:
-            thm = PIL.Image.open(gimg)
-            thm = layout_thumbnail(thm, size, justified)
-            thm.save(cacheabs, fmt, quality=70)
-        finally:
-            if os.path.exists(gimg):
-                os.unlink(gimg)
-    else:
-        with PIL.Image.open(src) as thm:
-            thm = layout_thumbnail(thm, size, justified)
-            thm.save(cacheabs, fmt, quality=70)
+    with thumbnail_source_image(src, size) as thm:
+        thm = layout_thumbnail(thm, size, justified)
+        thm.save(cacheabs, fmt, quality=70)
 
 
 def pregenerate_thumbnails():
@@ -430,6 +417,8 @@ def pregenerate_thumbnails():
         img_exts.add('avif')
     if ffmpeg:
         img_exts.update({'mp4', 'm4v', 'webm'})
+    if stl_thumb:
+        img_exts.update({'3mf', 'obj', 'stl'})
     if gltf_viewer:
         img_exts.update({'gltf', 'glb'})
 
@@ -510,13 +499,15 @@ def layout_thumbnail(img: PIL.Image.Image, size: int, justified: bool = False):
 
 
 def ffmpeg_thumb(src: str):
+    if not ffmpeg:
+        raise RuntimeError('ffmpeg is not available')
     sha1 = hashlib.sha1(src.encode()).hexdigest()
     root = thumb_dir() or tempfile.gettempdir()
     outfile = os.path.join(root, f'{sha1}_ffmpeg.webp')
     if os.path.exists(outfile):
         return outfile
     cmd = [
-        'ffmpeg',
+        ffmpeg,
         '-i', src,
         '-ss', '0',
         '-t', '5',
@@ -526,6 +517,27 @@ def ffmpeg_thumb(src: str):
         outfile
     ]
     subprocess.run(cmd, check=True)
+    return outfile
+
+
+def stl_thumb_render(src: str, size: int):
+    root = thumb_dir() or tempfile.gettempdir()
+    os.makedirs(root, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix='stl-thumb-', suffix='.png', dir=root, delete=False) as f:
+        outfile = f.name
+    cmd = [
+        stl_thumb,
+        '--size', str(max(1, size)),
+        src,
+        outfile,
+    ]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0 or not os.path.isfile(outfile):
+        if os.path.exists(outfile):
+            os.unlink(outfile)
+        raise RuntimeError(
+            f'stl-thumb failed (exit {result.returncode}): '
+            + result.stderr.decode('utf-8', errors='replace').strip())
     return outfile
 
 
@@ -561,6 +573,27 @@ def gltf_thumb(src: str):
     return outfile
 
 
+@contextmanager
+def thumbnail_source_image(src: str, size: int):
+    tmp = None
+    lower_src = src.lower()
+    if lower_src.endswith(VIDEO_EXTS):
+        if not ffmpeg:
+            raise RuntimeError('ffmpeg is not available')
+        tmp = ffmpeg_thumb(src)
+    elif lower_src.endswith(STL_THUMB_MODEL_EXTS) and stl_thumb:
+        tmp = stl_thumb_render(src, size)
+    elif lower_src.endswith(GLTF_VIEWER_MODEL_EXTS) and gltf_viewer:
+        tmp = gltf_thumb(src)
+
+    try:
+        with PIL.Image.open(tmp or src) as img:
+            yield img
+    finally:
+        if tmp and os.path.exists(tmp):
+            os.unlink(tmp)
+
+
 class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.title = os.environ.get('GALLERY_TITLE', 'Gallery')
@@ -578,11 +611,14 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             img_exts += ',mp4,m4v,webm'
         else:
             file_exts += ',mp4,m4v,webm'
+        if stl_thumb:
+            img_exts += ',3mf,obj,stl'
+        else:
+            file_exts += ',3mf,obj,stl'
         if gltf_viewer:
             img_exts += ',gltf,glb'
-            file_exts += ',obj,stl'
         else:
-            file_exts += ',obj,gltf,glb,stl'
+            file_exts += ',gltf,glb'
         self.image_exts = os.environ.get('IMAGE_EXTS', img_exts).split(',')
         self.file_exts = os.environ.get('FILE_EXTS', file_exts).split(',')
         super().__init__(*args, **kwargs)
@@ -781,18 +817,9 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                     if os.path.isdir(src):
                         self.save_dir_thumb(src, cacheabs, size, fmt)
                     else:
-                        if path.endswith(('.mp4', '.m4v', '.webm')):
-                            vimg = ffmpeg_thumb(src)
-                            thm = PIL.Image.open(vimg)
-                            os.unlink(vimg)
-                        elif path.lower().endswith(('.gltf', '.glb')):
-                            gimg = gltf_thumb(src)
-                            thm = PIL.Image.open(gimg)
-                            os.unlink(gimg)
-                        else:
-                            thm = PIL.Image.open(src)
-                        thm = layout_thumbnail(thm, size, justified)
-                        thm.save(cacheabs, fmt, quality=70)
+                        with thumbnail_source_image(src, size) as thm:
+                            thm = layout_thumbnail(thm, size, justified)
+                            thm.save(cacheabs, fmt, quality=70)
 
                 if cachedir == '.thm':
                     self.path = f'.thm/{cachefn}'
@@ -805,18 +832,9 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if os.path.isdir(src):
                     self.save_dir_thumb(src, target, size, fmt)
                 else:
-                    if path.endswith(('.mp4', '.m4v', '.webm')):
-                        vimg = ffmpeg_thumb(src)
-                        thm = PIL.Image.open(vimg)
-                        os.unlink(vimg)
-                    elif path.lower().endswith(('.gltf', '.glb')):
-                        gimg = gltf_thumb(src)
-                        thm = PIL.Image.open(gimg)
-                        os.unlink(gimg)
-                    else:
-                        thm = PIL.Image.open(src)
-                    thm = layout_thumbnail(thm, size, justified)
-                    thm.save(target, fmt, quality=70)
+                    with thumbnail_source_image(src, size) as thm:
+                        thm = layout_thumbnail(thm, size, justified)
+                        thm.save(target, fmt, quality=70)
 
             self.send_response(200)
             self.send_header('Content-Type', mime_type)
@@ -839,13 +857,13 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             if count >= 4:
                 break
             try:
-                sub = PIL.Image.open(img.path)
-                sub = cropped_thumbnail(sub, (size // 2, size // 2))
-                x = count % 2 * size // 2
-                y = (count // 2) * (size // 2)
-                thm.paste(sub, (x, y))
-                count += 1
-            except PIL.UnidentifiedImageError:
+                with thumbnail_source_image(img.path, size) as sub:
+                    sub = cropped_thumbnail(sub, (size // 2, size // 2))
+                    x = count % 2 * size // 2
+                    y = (count // 2) * (size // 2)
+                    thm.paste(sub, (x, y))
+                    count += 1
+            except Exception:
                 pass
         thm.save(outfile, fmt, quality=70)
 
