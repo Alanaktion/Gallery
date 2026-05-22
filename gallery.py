@@ -507,6 +507,7 @@ def ffmpeg_thumb(src: str):
         outfile = f.name
     cmd = [
         ffmpeg,
+        '-y',
         '-i', src,
         '-ss', '0',
         '-t', '5',
