@@ -27,6 +27,12 @@ This application requires the Pillow library to be installed:
 pip3 install Pillow
 ```
 
+Optional system tools on `PATH` extend thumbnail support:
+
+- `ffmpeg` for video thumbnails (`mp4`, `m4v`, `webm`)
+- `stl-thumb` for 3D model thumbnails (`3mf`, `obj`, `stl`)
+- `gltf_viewer` for 3D model thumbnails (`gltf`, `glb`)
+
 Set environment variables or create a `.env` file in the cwd to customize the gallery features. See [.env.example](.env.example) for the defaults.
 Set `GALLERY_JUSTIFIED=true` to enable the justified thumbnail layout.
 Set `GALLERY_PREGENERATE_THUMBNAILS=true` to pre-generate recursively for everything, or set a comma-separated path list like `GALLERY_PREGENERATE_THUMBNAILS=Trips,Family/2024`.
@@ -52,7 +58,7 @@ volumes:
   cache:
 ```
 
-A `gltf` Docker tag is also available that includes [Filament](https://github.com/google/filament)'s `gltf_viewer` for generating thumbnails of 3D model files (glTF, GLB, OBJ, STL):
+A `gltf` Docker tag is also available that includes both [stl-thumb](https://github.com/unlimitedbacon/stl-thumb) and [Filament](https://github.com/google/filament)'s `gltf_viewer` for generating thumbnails of supported 3D model files (`3mf`, `obj`, `stl`, `gltf`, `glb`):
 
 ```yml
 services:
@@ -70,6 +76,11 @@ volumes:
 ```
 
 ### Changelog
+
+0.9.2
+
+- Add `stl-thumb` support for 3D model thumbnails (`3mf`, `obj`, `stl`)
+- Build the `gltf` Docker image with both `stl-thumb` and `gltf_viewer`
 
 0.9.1
 
