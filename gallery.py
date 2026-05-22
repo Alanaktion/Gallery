@@ -356,7 +356,7 @@ def _save_directory_thumbnail(directory: str, cacheabs: str, size: int, fmt: str
             if ext not in image_exts:
                 continue
             try:
-                with PIL.Image.open(entry.path) as sub:
+                with thumbnail_source_image(entry.path, size) as sub:
                     sub = cropped_thumbnail(sub, (size // 2, size // 2))
                     x = count % 2 * size // 2
                     y = (count // 2) * (size // 2)
@@ -499,13 +499,15 @@ def layout_thumbnail(img: PIL.Image.Image, size: int, justified: bool = False):
 
 
 def ffmpeg_thumb(src: str):
+    if not ffmpeg:
+        raise RuntimeError('ffmpeg is not available')
     sha1 = hashlib.sha1(src.encode()).hexdigest()
     root = thumb_dir() or tempfile.gettempdir()
     outfile = os.path.join(root, f'{sha1}_ffmpeg.webp')
     if os.path.exists(outfile):
         return outfile
     cmd = [
-        'ffmpeg',
+        ffmpeg,
         '-i', src,
         '-ss', '0',
         '-t', '5',
@@ -519,11 +521,10 @@ def ffmpeg_thumb(src: str):
 
 
 def stl_thumb_render(src: str, size: int):
-    sha1 = hashlib.sha1(src.encode()).hexdigest()
     root = thumb_dir() or tempfile.gettempdir()
-    outfile = os.path.join(root, f'{sha1}_stl.png')
-    if os.path.exists(outfile):
-        return outfile
+    os.makedirs(root, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix='stl-thumb-', suffix='.png', dir=root, delete=False) as f:
+        outfile = f.name
     cmd = [
         stl_thumb,
         '--size', str(max(1, size)),
@@ -532,6 +533,8 @@ def stl_thumb_render(src: str, size: int):
     ]
     result = subprocess.run(cmd, capture_output=True)
     if result.returncode != 0 or not os.path.isfile(outfile):
+        if os.path.exists(outfile):
+            os.unlink(outfile)
         raise RuntimeError(
             f'stl-thumb failed (exit {result.returncode}): '
             + result.stderr.decode('utf-8', errors='replace').strip())
@@ -575,6 +578,8 @@ def thumbnail_source_image(src: str, size: int):
     tmp = None
     lower_src = src.lower()
     if lower_src.endswith(VIDEO_EXTS):
+        if not ffmpeg:
+            raise RuntimeError('ffmpeg is not available')
         tmp = ffmpeg_thumb(src)
     elif lower_src.endswith(STL_THUMB_MODEL_EXTS) and stl_thumb:
         tmp = stl_thumb_render(src, size)
@@ -852,13 +857,13 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             if count >= 4:
                 break
             try:
-                sub = PIL.Image.open(img.path)
-                sub = cropped_thumbnail(sub, (size // 2, size // 2))
-                x = count % 2 * size // 2
-                y = (count // 2) * (size // 2)
-                thm.paste(sub, (x, y))
-                count += 1
-            except PIL.UnidentifiedImageError:
+                with thumbnail_source_image(img.path, size) as sub:
+                    sub = cropped_thumbnail(sub, (size // 2, size // 2))
+                    x = count % 2 * size // 2
+                    y = (count // 2) * (size // 2)
+                    thm.paste(sub, (x, y))
+                    count += 1
+            except Exception:
                 pass
         thm.save(outfile, fmt, quality=70)
 
