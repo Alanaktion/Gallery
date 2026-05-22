@@ -501,13 +501,13 @@ def layout_thumbnail(img: PIL.Image.Image, size: int, justified: bool = False):
 def ffmpeg_thumb(src: str):
     if not ffmpeg:
         raise RuntimeError('ffmpeg is not available')
-    sha1 = hashlib.sha1(src.encode()).hexdigest()
     root = thumb_dir() or tempfile.gettempdir()
-    outfile = os.path.join(root, f'{sha1}_ffmpeg.webp')
-    if os.path.exists(outfile):
-        return outfile
+    os.makedirs(root, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix='ffmpeg-thumb-', suffix='.webp', dir=root, delete=False) as f:
+        outfile = f.name
     cmd = [
         ffmpeg,
+        '-y',
         '-i', src,
         '-ss', '0',
         '-t', '5',
@@ -516,7 +516,13 @@ def ffmpeg_thumb(src: str):
         '-f', 'webp',
         outfile
     ]
-    subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0 or not os.path.isfile(outfile):
+        if os.path.exists(outfile):
+            os.unlink(outfile)
+        raise RuntimeError(
+            f'ffmpeg failed (exit {result.returncode}): '
+            + result.stderr.decode('utf-8', errors='replace').strip())
     return outfile
 
 
@@ -542,11 +548,10 @@ def stl_thumb_render(src: str, size: int):
 
 
 def gltf_thumb(src: str):
-    sha1 = hashlib.sha1(src.encode()).hexdigest()
     root = thumb_dir() or tempfile.gettempdir()
-    outfile = os.path.join(root, f'{sha1}_gltf.webp')
-    if os.path.exists(outfile):
-        return outfile
+    os.makedirs(root, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix='gltf-thumb-', suffix='.webp', dir=root, delete=False) as f:
+        outfile = f.name
     spec = ('[{"name":"thumb","base":{'
             '"viewer.skyboxEnabled":false,'
             '"viewer.backgroundColor":[1,1,1],'
@@ -565,6 +570,8 @@ def gltf_thumb(src: str):
         result = subprocess.run(cmd, cwd=tmpdir, capture_output=True, env=env)
         out_tif = os.path.join(tmpdir, 'thumb0.tif')
         if result.returncode != 0 or not os.path.isfile(out_tif):
+            if os.path.exists(outfile):
+                os.unlink(outfile)
             raise RuntimeError(
                 f'gltf_viewer failed (exit {result.returncode}): '
                 + result.stderr.decode('utf-8', errors='replace').strip())
