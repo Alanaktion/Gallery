@@ -1,6 +1,6 @@
 FROM docker.io/library/python
 
-# Install system dependencies for headless rendering with gltf_viewer and stl-thumb
+# Install system dependencies for headless rendering with Blender
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ffmpeg \
@@ -12,31 +12,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libosmesa6-dev \
     xauth \
     xvfb \
+    blender \
     && rm -rf /var/lib/apt/lists/*
-
-# Download and install Filament's gltf_viewer
-ARG FILAMENT_VERSION=v1.69.4
-RUN curl -fL "https://github.com/google/filament/releases/download/${FILAMENT_VERSION}/filament-${FILAMENT_VERSION}-linux.tgz" \
-    -o /tmp/filament.tgz \
-    && mkdir -p /tmp/filament-extract \
-    && tar -xzf /tmp/filament.tgz -C /tmp/filament-extract \
-    && find /tmp/filament-extract -name 'gltf_viewer' -type f \
-       -exec install -m 755 {} /usr/local/bin/gltf_viewer \; \
-    && rm -rf /tmp/filament.tgz /tmp/filament-extract
 
 ARG STL_THUMB_VERSION=v0.5.0
 RUN arch="$(dpkg --print-architecture)" \
-    && curl -fL "https://github.com/unlimitedbacon/stl-thumb/releases/download/${STL_THUMB_VERSION}/stl-thumb_${STL_THUMB_VERSION#v}_${arch}.deb" \
-       -o /tmp/stl-thumb.deb \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends /tmp/stl-thumb.deb \
-    && rm -f /tmp/stl-thumb.deb \
-    && rm -rf /var/lib/apt/lists/*
+     && curl -fL "https://github.com/unlimitedbacon/stl-thumb/releases/download/${STL_THUMB_VERSION}/stl-thumb_${STL_THUMB_VERSION#v}_${arch}.deb" \
+         -o /tmp/stl-thumb.deb \
+     && apt-get update \
+     && apt-get install -y --no-install-recommends /tmp/stl-thumb.deb \
+     && rm -f /tmp/stl-thumb.deb \
+     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir Pillow python-dotenv pi-heif
 
 WORKDIR /usr/src/app
 COPY gallery.py .
+COPY blender_thumb.py .
+COPY matcap.png .
 
 ENV GALLERY_HOST=0.0.0.0
 ENV GALLERY_PORT=8000

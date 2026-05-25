@@ -28,8 +28,10 @@ except ImportError:
     heif_support = False
 
 ffmpeg = os.environ.get('FFMPEG_PATH', shutil.which('ffmpeg'))
-gltf_viewer = os.environ.get('GLTF_VIEWER_PATH', shutil.which('gltf_viewer'))
+blender = os.environ.get('BLENDER_PATH', shutil.which('blender'))
 stl_thumb = os.environ.get('STL_THUMB_PATH', shutil.which('stl-thumb'))
+blender_thumb_script = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), 'blender_thumb.py')
 
 
 def _check_avif_support():
@@ -40,11 +42,14 @@ def _check_avif_support():
     except Exception:
         return False
 
+
 avif_support = _check_avif_support()
 
 VIDEO_EXTS = ('.mp4', '.m4v', '.webm')
 STL_THUMB_MODEL_EXTS = ('.3mf', '.obj', '.stl')
-GLTF_VIEWER_MODEL_EXTS = ('.gltf', '.glb')
+BLENDER_ONLY_MODEL_EXTS = ('.fbx', '.glb', '.gltf')
+BLENDER_MODEL_EXTS = STL_THUMB_MODEL_EXTS + BLENDER_ONLY_MODEL_EXTS
+BLENDER_MODEL_EXT_NAMES = tuple(ext.lstrip('.') for ext in BLENDER_MODEL_EXTS)
 
 # Ensure AVIF MIME type is registered for SimpleHTTPRequestHandler to serve correctly
 mimetypes.add_type('image/avif', '.avif')
@@ -52,6 +57,7 @@ mimetypes.add_type('image/avif', '.avif')
 
 _BOOLEAN_STATES = {'1': True, 'yes': True, 'true': True, 'on': True,
                    '0': False, 'no': False, 'false': False, 'off': False}
+
 
 def _env_bool(value: str):
     if value.lower() not in _BOOLEAN_STATES:
@@ -309,7 +315,8 @@ def thumb_dir():
         root = os.path.expanduser(thumbdir)
         return root
     else:
-        root = os.path.join(os.path.expanduser(os.environ.get('GALLERY_DIRECTORY', '.')), '.thm')
+        root = os.path.join(os.path.expanduser(
+            os.environ.get('GALLERY_DIRECTORY', '.')), '.thm')
         os.makedirs(root, exist_ok=True)
         return '.thm'
 
@@ -328,7 +335,8 @@ def _pregenerate_target_paths(spec: str, root_dir: str) -> list[str]:
 
     targets = []
     for raw in _split_csv(norm):
-        candidate = os.path.abspath(os.path.join(root_dir, os.path.expanduser(raw)))
+        candidate = os.path.abspath(os.path.join(
+            root_dir, os.path.expanduser(raw)))
         if os.path.commonpath([candidate, root_dir]) != root_dir:
             continue
         if os.path.exists(candidate):
@@ -405,7 +413,8 @@ def pregenerate_thumbnails():
     if not cachedir:
         return
 
-    root_dir = os.path.abspath(os.path.expanduser(os.environ.get('GALLERY_DIRECTORY', '.')))
+    root_dir = os.path.abspath(os.path.expanduser(
+        os.environ.get('GALLERY_DIRECTORY', '.')))
     targets = _pregenerate_target_paths(spec, root_dir)
     if not targets:
         return
@@ -417,12 +426,13 @@ def pregenerate_thumbnails():
         img_exts.add('avif')
     if ffmpeg:
         img_exts.update({'mp4', 'm4v', 'webm'})
-    if stl_thumb:
-        img_exts.update({'3mf', 'obj', 'stl'})
-    if gltf_viewer:
-        img_exts.update({'gltf', 'glb'})
+    if stl_thumb or blender:
+        img_exts.update(ext.lstrip('.') for ext in STL_THUMB_MODEL_EXTS)
+    if blender:
+        img_exts.update(ext.lstrip('.') for ext in BLENDER_ONLY_MODEL_EXTS)
 
-    image_exts = set(_split_csv(os.environ.get('IMAGE_EXTS', ','.join(sorted(img_exts)))))
+    image_exts = set(_split_csv(os.environ.get(
+        'IMAGE_EXTS', ','.join(sorted(img_exts)))))
     size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
     justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')) is True
     mode_suffix = '-j' if justified else ''
@@ -430,23 +440,31 @@ def pregenerate_thumbnails():
     for target in targets:
         for directory in _iter_pregenerate_dirs(target):
             sha1 = hashlib.sha1(directory.encode()).hexdigest()
-            webp_cache = os.path.abspath(f'{cachedir}/{sha1}{mode_suffix}.webp')
+            webp_cache = os.path.abspath(
+                f'{cachedir}/{sha1}{mode_suffix}.webp')
             try:
-                _save_directory_thumbnail(directory, webp_cache, size, 'webp', image_exts)
+                _save_directory_thumbnail(
+                    directory, webp_cache, size, 'webp', image_exts)
                 if avif_support:
-                    avif_cache = os.path.abspath(f'{cachedir}/{sha1}{mode_suffix}.avif')
-                    _save_directory_thumbnail(directory, avif_cache, size, 'avif', image_exts)
+                    avif_cache = os.path.abspath(
+                        f'{cachedir}/{sha1}{mode_suffix}.avif')
+                    _save_directory_thumbnail(
+                        directory, avif_cache, size, 'avif', image_exts)
             except Exception:
                 continue
 
         for src in _iter_pregenerate_files(target, image_exts):
             sha1 = hashlib.sha1(src.encode()).hexdigest()
-            webp_cache = os.path.abspath(f'{cachedir}/{sha1}{mode_suffix}.webp')
+            webp_cache = os.path.abspath(
+                f'{cachedir}/{sha1}{mode_suffix}.webp')
             try:
-                _save_thumbnail_variant(src, webp_cache, size, justified, 'webp')
+                _save_thumbnail_variant(
+                    src, webp_cache, size, justified, 'webp')
                 if avif_support:
-                    avif_cache = os.path.abspath(f'{cachedir}/{sha1}{mode_suffix}.avif')
-                    _save_thumbnail_variant(src, avif_cache, size, justified, 'avif')
+                    avif_cache = os.path.abspath(
+                        f'{cachedir}/{sha1}{mode_suffix}.avif')
+                    _save_thumbnail_variant(
+                        src, avif_cache, size, justified, 'avif')
             except Exception:
                 continue
 
@@ -488,7 +506,8 @@ def layout_thumbnail(img: PIL.Image.Image, size: int, justified: bool = False):
     target_width = max(1, round(source_width * scale))
 
     try:
-        max_width_multiplier = int(os.environ.get('JUSTIFIED_THUMBNAIL_MAX_WIDTH_MULTIPLIER', '4'))
+        max_width_multiplier = int(os.environ.get(
+            'JUSTIFIED_THUMBNAIL_MAX_WIDTH_MULTIPLIER', '4'))
     except ValueError:
         max_width_multiplier = 4
     max_width_multiplier = max(1, max_width_multiplier)
@@ -527,6 +546,9 @@ def ffmpeg_thumb(src: str):
 
 
 def stl_thumb_render(src: str, size: int):
+    if not stl_thumb:
+        raise RuntimeError('stl-thumb is not available')
+
     root = thumb_dir() or tempfile.gettempdir()
     os.makedirs(root, exist_ok=True)
     with tempfile.NamedTemporaryFile(prefix='stl-thumb-', suffix='.png', dir=root, delete=False) as f:
@@ -547,36 +569,36 @@ def stl_thumb_render(src: str, size: int):
     return outfile
 
 
-def gltf_thumb(src: str):
+def blender_thumb_render(src: str, size: int):
+    if not blender:
+        raise RuntimeError('blender is not available')
+
     root = thumb_dir() or tempfile.gettempdir()
     os.makedirs(root, exist_ok=True)
-    with tempfile.NamedTemporaryFile(prefix='gltf-thumb-', suffix='.webp', dir=root, delete=False) as f:
+    with tempfile.NamedTemporaryFile(prefix='blender-thumb-', suffix='.png', dir=root, delete=False) as f:
         outfile = f.name
-    spec = ('[{"name":"thumb","base":{'
-            '"viewer.skyboxEnabled":false,'
-            '"viewer.backgroundColor":[1,1,1],'
-            '"camera.focalLength":100,'
-            '"view.colorGrading.exposure":2.0'
-            '}}]')
-    with tempfile.TemporaryDirectory() as tmpdir:
-        spec_path = os.path.join(tmpdir, 'spec.json')
-        with open(spec_path, 'w') as f:
-            f.write(spec)
-        cmd = [gltf_viewer, '--api=opengl', f'--batch={spec_path}', '--headless', src]
-        xvfb_run = shutil.which('xvfb-run')
-        if xvfb_run:
-            cmd = [xvfb_run, '-a'] + cmd
-        env = {**os.environ, 'LIBGL_ALWAYS_SOFTWARE': '1'}
-        result = subprocess.run(cmd, cwd=tmpdir, capture_output=True, env=env)
-        out_tif = os.path.join(tmpdir, 'thumb0.tif')
-        if result.returncode != 0 or not os.path.isfile(out_tif):
-            if os.path.exists(outfile):
-                os.unlink(outfile)
-            raise RuntimeError(
-                f'gltf_viewer failed (exit {result.returncode}): '
-                + result.stderr.decode('utf-8', errors='replace').strip())
-        img = PIL.Image.open(out_tif)
-        img.save(outfile, 'webp', quality=70)
+    cmd = [
+        blender,
+        '-b',
+        '--factory-startup',
+        '-P',
+        blender_thumb_script,
+        '--',
+        '--input', src,
+        '--output', outfile,
+        '--size', str(max(1, size)),
+    ]
+    xvfb_run = shutil.which('xvfb-run')
+    if xvfb_run:
+        cmd = [xvfb_run, '-a'] + cmd
+
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0 or not os.path.isfile(outfile):
+        if os.path.exists(outfile):
+            os.unlink(outfile)
+        raise RuntimeError(
+            f'blender thumbnail failed (exit {result.returncode}): '
+            + result.stderr.decode('utf-8', errors='replace').strip())
     return outfile
 
 
@@ -588,10 +610,19 @@ def thumbnail_source_image(src: str, size: int):
         if not ffmpeg:
             raise RuntimeError('ffmpeg is not available')
         tmp = ffmpeg_thumb(src)
-    elif lower_src.endswith(STL_THUMB_MODEL_EXTS) and stl_thumb:
-        tmp = stl_thumb_render(src, size)
-    elif lower_src.endswith(GLTF_VIEWER_MODEL_EXTS) and gltf_viewer:
-        tmp = gltf_thumb(src)
+    elif lower_src.endswith(STL_THUMB_MODEL_EXTS):
+        if stl_thumb:
+            try:
+                tmp = stl_thumb_render(src, size)
+            except Exception:
+                if blender:
+                    tmp = blender_thumb_render(src, size)
+                else:
+                    raise
+        elif blender:
+            tmp = blender_thumb_render(src, size)
+    elif lower_src.endswith(BLENDER_ONLY_MODEL_EXTS) and blender:
+        tmp = blender_thumb_render(src, size)
 
     try:
         with PIL.Image.open(tmp or src) as img:
@@ -619,13 +650,16 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             file_exts += ',mp4,m4v,webm'
         if stl_thumb:
-            img_exts += ',3mf,obj,stl'
+            img_exts += ',' + ','.join(ext.lstrip('.') for ext in STL_THUMB_MODEL_EXTS)
+        elif blender:
+            img_exts += ',' + ','.join(ext.lstrip('.') for ext in STL_THUMB_MODEL_EXTS)
         else:
-            file_exts += ',3mf,obj,stl'
-        if gltf_viewer:
-            img_exts += ',gltf,glb'
+            file_exts += ',' + ','.join(ext.lstrip('.') for ext in STL_THUMB_MODEL_EXTS)
+
+        if blender:
+            img_exts += ',' + ','.join(ext.lstrip('.') for ext in BLENDER_ONLY_MODEL_EXTS)
         else:
-            file_exts += ',gltf,glb'
+            file_exts += ',' + ','.join(ext.lstrip('.') for ext in BLENDER_ONLY_MODEL_EXTS)
         self.image_exts = os.environ.get('IMAGE_EXTS', img_exts).split(',')
         self.file_exts = os.environ.get('FILE_EXTS', file_exts).split(',')
         super().__init__(*args, **kwargs)
@@ -664,7 +698,8 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         global e
         try:
             directories, images, files = self._read_dir(directory)
-            justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')) is True
+            justified = _env_bool(os.environ.get(
+                'GALLERY_JUSTIFIED', 'false')) is True
             thumb_size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
 
             breadcrumbs = ""
@@ -802,7 +837,8 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
         sha1 = hashlib.sha1(src.encode()).hexdigest()
         suffix = ''
         size = int(os.environ.get('THUMBNAIL_SIZE', '200'))
-        justified = _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')) is True
+        justified = _env_bool(os.environ.get(
+            'GALLERY_JUSTIFIED', 'false')) is True
         url = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(url.query)
         if qs.get('scale'):
@@ -811,7 +847,8 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
             size *= scale
         mode_suffix = '-j' if justified else ''
 
-        fmt = 'avif' if (qs.get('fmt', [''])[0] == 'avif' and avif_support) else 'webp'
+        fmt = 'avif' if (qs.get('fmt', [''])[0]
+                         == 'avif' and avif_support) else 'webp'
         mime_type = f'image/{fmt}'
 
         cachedir = thumb_dir()
@@ -886,7 +923,8 @@ def args_to_env():
         const='true',
         help='pre-generate thumbnails recursively in a subprocess; true=all, or pass csv paths',
     )
-    parser.add_argument('--pregenerate-run', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--pregenerate-run',
+                        action='store_true', help=argparse.SUPPRESS)
 
     args = parser.parse_args()
     if args.address:

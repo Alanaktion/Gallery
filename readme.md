@@ -30,8 +30,7 @@ pip3 install Pillow
 Optional system tools on `PATH` extend thumbnail support:
 
 - `ffmpeg` for video thumbnails (`mp4`, `m4v`, `webm`)
-- `stl-thumb` for 3D model thumbnails (`3mf`, `obj`, `stl`)
-- `gltf_viewer` for 3D model thumbnails (`gltf`, `glb`)
+- `blender` for 3D model thumbnails (`3mf`, `fbx`, `gltf`, `glb`, `obj`, `stl`)
 
 Set environment variables or create a `.env` file in the cwd to customize the gallery features. See [.env.example](.env.example) for the defaults.
 Set `GALLERY_JUSTIFIED=true` to enable the justified thumbnail layout.
@@ -58,7 +57,7 @@ volumes:
   cache:
 ```
 
-A `gltf` Docker tag is also available that includes both [stl-thumb](https://github.com/unlimitedbacon/stl-thumb) and [Filament](https://github.com/google/filament)'s `gltf_viewer` for generating thumbnails of supported 3D model files (`3mf`, `obj`, `stl`, `gltf`, `glb`):
+A `gltf` Docker tag is also available that includes [Blender](https://www.blender.org/) for generating thumbnails of supported 3D model files (`3mf`, `fbx`, `obj`, `stl`, `gltf`, `glb`):
 
 ```yml
 services:
@@ -79,8 +78,8 @@ volumes:
 
 0.9.2
 
-- Add `stl-thumb` support for 3D model thumbnails (`3mf`, `obj`, `stl`)
-- Build the `gltf` Docker image with both `stl-thumb` and `gltf_viewer`
+- Switch 3D model thumbnails to Blender (`3mf`, `fbx`, `obj`, `stl`, `gltf`, `glb`)
+- Build the `gltf` Docker image with Blender only for 3D model rendering
 
 0.9.1
 
@@ -89,8 +88,8 @@ volumes:
 
 0.9.0
 
-- 3D model support (glTF, GLB, OBJ, STL) with thumbnail generation via Filament's `gltf_viewer --batch`
-- Docker image with gltf_viewer for 3D model rendering (`ghcr.io/alanaktion/gallery:gltf`)
+- 3D model support (glTF, GLB, OBJ, STL) with thumbnail generation via Blender
+- Docker image with Blender-based 3D model rendering (`ghcr.io/alanaktion/gallery:gltf`)
 
 0.8.0
 
