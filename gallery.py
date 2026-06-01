@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import PIL.Image
 import urllib.parse
 
@@ -32,6 +33,39 @@ blender = os.environ.get('BLENDER_PATH', shutil.which('blender'))
 stl_thumb = os.environ.get('STL_THUMB_PATH', shutil.which('stl-thumb'))
 blender_thumb_script = os.path.join(os.path.dirname(
     os.path.abspath(__file__)), 'blender_thumb.py')
+
+try:
+    _subprocess_limit = max(1, int(os.environ.get('SUBPROCESS_LIMIT', '4')))
+except ValueError:
+    _subprocess_limit = 4
+
+try:
+    _subprocess_wait_timeout = max(0.0, float(
+        os.environ.get('SUBPROCESS_WAIT_TIMEOUT', '30')))
+except ValueError:
+    _subprocess_wait_timeout = 30.0
+
+_subprocess_semaphore = threading.BoundedSemaphore(_subprocess_limit)
+
+
+class SubprocessLimitError(RuntimeError):
+    """Raised when the subprocess concurrency limit is reached and the wait times out."""
+    pass
+
+
+@contextmanager
+def _subprocess_slot():
+    """Acquire a subprocess concurrency slot, blocking up to _subprocess_wait_timeout seconds."""
+    acquired = _subprocess_semaphore.acquire(timeout=_subprocess_wait_timeout)
+    if not acquired:
+        raise SubprocessLimitError(
+            f'Subprocess limit reached ({_subprocess_limit} concurrent); '
+            f'timed out after {_subprocess_wait_timeout:.0f}s'
+        )
+    try:
+        yield
+    finally:
+        _subprocess_semaphore.release()
 
 
 def _check_avif_support():
@@ -535,7 +569,8 @@ def ffmpeg_thumb(src: str):
         '-f', 'webp',
         outfile
     ]
-    result = subprocess.run(cmd, capture_output=True)
+    with _subprocess_slot():
+        result = subprocess.run(cmd, capture_output=True)
     if result.returncode != 0 or not os.path.isfile(outfile):
         if os.path.exists(outfile):
             os.unlink(outfile)
@@ -559,7 +594,8 @@ def stl_thumb_render(src: str, size: int):
         src,
         outfile,
     ]
-    result = subprocess.run(cmd, capture_output=True)
+    with _subprocess_slot():
+        result = subprocess.run(cmd, capture_output=True)
     if result.returncode != 0 or not os.path.isfile(outfile):
         if os.path.exists(outfile):
             os.unlink(outfile)
@@ -592,7 +628,8 @@ def blender_thumb_render(src: str, size: int):
     if xvfb_run:
         cmd = [xvfb_run, '-a'] + cmd
 
-    result = subprocess.run(cmd, capture_output=True)
+    with _subprocess_slot():
+        result = subprocess.run(cmd, capture_output=True)
     if result.returncode != 0 or not os.path.isfile(outfile):
         if os.path.exists(outfile):
             os.unlink(outfile)
@@ -614,6 +651,8 @@ def thumbnail_source_image(src: str, size: int):
         if stl_thumb:
             try:
                 tmp = stl_thumb_render(src, size)
+            except SubprocessLimitError:
+                raise
             except Exception:
                 if blender:
                     tmp = blender_thumb_render(src, size)
@@ -892,6 +931,10 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         except PermissionError:
             self.send_error(403)
+        except SubprocessLimitError:
+            self.send_response(503)
+            self.send_header('Retry-After', str(int(_subprocess_wait_timeout)))
+            self.end_headers()
 
     def save_dir_thumb(self, directory: str, outfile, size: int, fmt: str = 'webp'):
         thm = PIL.Image.new('RGBA', (size, size), (0, 0, 0, 0))
@@ -907,6 +950,8 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
                     y = (count // 2) * (size // 2)
                     thm.paste(sub, (x, y))
                     count += 1
+            except SubprocessLimitError:
+                raise
             except Exception:
                 pass
         thm.save(outfile, fmt, quality=70)
