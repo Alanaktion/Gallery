@@ -230,33 +230,27 @@ a.image:focus span {
 """
 
     if _env_bool(os.environ.get('GALLERY_JUSTIFIED', 'false')):
-        styles += """
-.container {
+        styles += f"""
+.container {{
     max-width: none !important;
-}
-.jg-entry:not(.jg-entry-visible) {
-    position: static !important;
-}
-.justified-gallery:has(.jg-entry:not(.jg-entry-visible)) {
-    min-height: 100vh;
-}
-.justified-gallery > a.jg-entry-visible > picture > img {
-    position: absolute;
-    top: 50%;
-    left: 50%;
+}}
+.justified-gallery {{
+    display: flex;
+    flex-flow: row wrap;
+    gap: 1rem;
+}}
+.justified-gallery a {{
+    flex: auto;
+    height: {size}px;
     margin: 0;
-    padding: 0;
     border: none;
-}
-.justified-gallery > a:not(.jg-entry-visible) {
-    position: absolute !important;
-    opacity: 1 !important;
-    bottom: 0;
-}
-.justified-gallery > .jg-entry-visible > picture > img {
-    opacity: 1;
-    transition: opacity 500ms ease-in;
-}
+    outline: none;
+}}
+.justified-gallery a img {{
+    height: {size}px;
+    width: 100%;
+    object-fit: cover;
+}}
 """
 
     c = 3
@@ -765,10 +759,6 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
     {css()}
     </style>
 """
-            if justified:
-                response_content += """
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/dist/index.css">
-"""
             response_content += f"""
 </head>
 <body>
@@ -809,47 +799,11 @@ class GalleryRequestHandler(http.server.SimpleHTTPRequestHandler):
 """
 
             if justified:
-                min_width = (thumb_size + 6) * 4
                 if dir_tiles:
                     response_content += f'<div class="grid">{dir_tiles}</div>'
-                response_content += f'<div class="grid" id="jg-queue">{image_tiles}</div>'
+                response_content += f'<div class="justified-gallery">{image_tiles}</div>'
                 if file_tiles:
                     response_content += f'<div class="grid">{file_tiles}</div>'
-                response_content += f"""
-    <script type="module">
-        import {{ justifiedGallery }} from 'https://cdn.jsdelivr.net/npm/@slithy/justified-gallery@4.0.0/+esm';
-        const queue = document.getElementById('jg-queue');
-        if (queue && window.matchMedia('(min-width: {min_width}px)').matches) {{
-            queue.style.opacity = '0';
-            queue.style.pointerEvents = 'none';
-            const jgEl = document.createElement('div');
-            jgEl.className = 'justified-gallery';
-            queue.parentNode.insertBefore(jgEl, queue);
-            const jg = justifiedGallery(jgEl, {{
-                rowHeight: {thumb_size},
-                margins: 4,
-                imgSelector: 'img',
-                captions: false,
-            }});
-            const observer = new IntersectionObserver((entries) => {{
-                let added = false;
-                for (const entry of entries) {{
-                    if (entry.isIntersecting) {{
-                        observer.unobserve(entry.target);
-                        const img = entry.target.querySelector('img');
-                        if (img) img.removeAttribute('loading');
-                        jgEl.appendChild(entry.target);
-                        added = true;
-                    }}
-                }}
-                if (added) jg.addEntries();
-            }}, {{ rootMargin: '400px 0px 0px 0px' }});
-            for (const el of queue.querySelectorAll('a.image')) {{
-                observer.observe(el);
-            }}
-        }}
-    </script>
-"""
             else:
                 response_content += f'<div class="grid">{dir_tiles}{image_tiles}{file_tiles}</div>'
 
