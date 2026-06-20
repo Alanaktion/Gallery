@@ -90,6 +90,7 @@ async function navigate(path, historyMode = 'push') {
   document.getElementById('btn-empty-trash').style.display = data.has_trash ? '' : 'none';
   const showEmptyNonFavs = data.has_fav && data.media.length;
   document.getElementById('btn-empty-nonfavs').style.display = showEmptyNonFavs ? '' : 'none';
+  document.getElementById('btn-favdir').style.display = dirPath !== '' ? '' : 'none';
   const showDeleteDir = dirPath !== '' && !data.has_trash && !data.has_fav && !data.dirs.length;
   document.getElementById('btn-delete-dir').style.display = showDeleteDir ? '' : 'none';
 }
@@ -549,6 +550,24 @@ document.getElementById('btn-empty-nonfavs').addEventListener('click', async () 
       const d = await res.json();
       showToast(`✂ Deleted ${d.deleted} non-fav file(s)`);
       navigate(dirPath, 'replace');
+    } else {
+      const d = await res.json().catch(() => ({}));
+      showToast('Error: ' + (d.error || res.status));
+    }
+  } catch { showToast('Network error'); }
+});
+
+document.getElementById('btn-favdir').addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/favdir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: dirPath }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      showToast('★ Folder added to favorites');
+      navigate(d.dest);
     } else {
       const d = await res.json().catch(() => ({}));
       showToast('Error: ' + (d.error || res.status));

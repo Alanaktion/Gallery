@@ -243,6 +243,8 @@ body {
 .act-btn.active { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.35); }
 #btn-fav { color: #ffd700; }
 #btn-fav:hover { background: rgba(255,215,0,0.18); }
+#btn-favdir { color: #ffd700; }
+#btn-favdir:hover { background: rgba(255,215,0,0.18); border-color: #ffd700; }
 #btn-del { color: #ff6b6b; }
 #btn-del:hover { background: rgba(255,107,107,0.18); }
 

@@ -145,6 +145,8 @@ class Handler(BaseHTTPRequestHandler):
             self._api_empty_trash(body['path'])
         elif p == '/api/empty-nonfavs':
             self._api_empty_nonfavs(body['path'])
+        elif p == '/api/favdir':
+            self._api_favdir(body['path'])
         elif p == '/api/delete-dir':
             self._api_delete_dir(body['path'])
         else:
@@ -333,6 +335,37 @@ class Handler(BaseHTTPRequestHandler):
         dest = unique_dest(dest_dir, abs_src.name)
         try:
             shutil.move(str(abs_src), str(dest))
+        except OSError as e:
+            self.err_json(str(e), 500)
+            return
+
+        self.send_json({'ok': True, 'dest': str(dest.relative_to(ROOT))})
+
+    def _api_favdir(self, rel: str) -> None:
+        if not validate_rel_path(rel):
+            self.err_json('invalid path', 400)
+            return
+
+        abs_dir = resolve_safe(rel)
+        if abs_dir is None or abs_dir.is_symlink() or not abs_dir.is_dir():
+            self.err_json('directory not found', 404)
+            return
+
+        if abs_dir == ROOT:
+            self.err_json('cannot favdir root', 400)
+            return
+
+        parent = abs_dir.parent
+        dir_name = abs_dir.name
+
+        fav_dir = safe_dest_dir(parent, 'fav')
+        if fav_dir is None:
+            self.err_json('cannot create fav directory', 500)
+            return
+
+        dest = unique_dest(fav_dir, dir_name)
+        try:
+            shutil.move(str(abs_dir), str(dest))
         except OSError as e:
             self.err_json(str(e), 500)
             return
