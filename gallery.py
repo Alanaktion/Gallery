@@ -212,6 +212,11 @@ footer {
     color: #777;
 }
 .clear {clear: both;}
+.grid::after {
+    content: '';
+    display: table;
+    clear: both;
+}
 """
 
     size = int(os.environ.get('THUMBNAIL_SIZE', '200'))

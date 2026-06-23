@@ -675,6 +675,11 @@ $justified = !empty($config["interface"]["justified"]);
 		color: #777;
 	}
 	.clear {clear: both;}
+	.grid::after {
+		content: '';
+		display: table;
+		clear: both;
+	}
 	<?php if ($justified) { ?>
 		.container {
 			max-width: none !important;
