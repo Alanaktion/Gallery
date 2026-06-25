@@ -413,6 +413,21 @@ document.getElementById('btn-next').addEventListener('click', () => {
 });
 document.getElementById('btn-close').addEventListener('click', closeFS);
 
+function toggleBrowserFS(e) {
+  if (e.button !== 0) {
+    return;
+  }
+  e.preventDefault();
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+document.getElementById('fs-img').addEventListener('dblclick', toggleBrowserFS);
+document.getElementById('fs-vid').addEventListener('dblclick', toggleBrowserFS);
+
 // ── Controls auto-hide on keyboard use ──────────────────────
 
 const fsEl = document.getElementById('fullscreen');
