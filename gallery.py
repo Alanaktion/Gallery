@@ -327,7 +327,11 @@ class Handler(BaseHTTPRequestHandler):
             self.err_json('not a supported media file', 400)
             return
 
-        dest_dir = safe_dest_dir(abs_src.parent, dest_name)
+        parent = abs_src.parent
+        if dest_name == 'fav' and parent.name == 'trash':
+            parent = parent.parent
+
+        dest_dir = safe_dest_dir(parent, dest_name)
         if dest_dir is None:
             self.err_json(f'cannot create {dest_name} directory', 500)
             return
