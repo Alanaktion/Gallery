@@ -46,9 +46,10 @@ body {
 }
 
 .item {
-  flex: var(--ar, 1) 1 0;
-  min-width: 120px;
+  flex: auto;
   height: var(--img-h, 250px);
+  aspect-ratio: var(--ar, 1);
+  min-width: 120px;
   overflow: hidden;
   border-radius: 4px;
   background: #222;
