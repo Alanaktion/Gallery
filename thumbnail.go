@@ -4,11 +4,11 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"image"
-	"image/jpeg"
 	"os"
 	"path/filepath"
 	"strings"
 
+	webpenc "github.com/gen2brain/webp"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/webp"
 )
@@ -43,7 +43,7 @@ func thumbnailPath(relPath, cacheDir string) string {
 	h := sha256.Sum256([]byte(relPath))
 	hash := fmt.Sprintf("%x", h[:16])
 	dir := filepath.Join(cacheDir, hash[:2])
-	return filepath.Join(dir, hash+".jpg")
+	return filepath.Join(dir, hash+".webp")
 }
 
 func (g *Gallery) GenerateThumbnail(relPath string) (string, error) {
@@ -85,7 +85,7 @@ func (g *Gallery) GenerateThumbnail(relPath string) (string, error) {
 	}
 	defer f.Close()
 
-	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: g.Quality}); err != nil {
+	if err := webpenc.Encode(f, img, webpenc.Options{Quality: g.Quality}); err != nil {
 		return "", err
 	}
 

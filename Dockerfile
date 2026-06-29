@@ -13,9 +13,9 @@ RUN apk add --no-cache ffmpeg ca-certificates
 COPY --from=builder /gallery /usr/local/bin/gallery
 
 EXPOSE 8080
-VOLUME ["/data"]
+VOLUME ["/files"]
 
-ENV GALLERY_ROOT=/data
+ENV GALLERY_ROOT=/files
 ENV GALLERY_PORT=8080
 ENV GALLERY_IMAGE_HEIGHT=250
 ENV GALLERY_MAX_ASPECT=2.0

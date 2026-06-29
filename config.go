@@ -17,7 +17,7 @@ type Config struct {
 
 func LoadConfig() Config {
 	return Config{
-		Root:        envStr("GALLERY_ROOT", "/data"),
+		Root:        envStr("GALLERY_ROOT", "/files"),
 		Port:        envStr("GALLERY_PORT", "8080"),
 		ImageHeight: envInt("GALLERY_IMAGE_HEIGHT", 250),
 		MaxAspect:   envFloat("GALLERY_MAX_ASPECT", 2.0),

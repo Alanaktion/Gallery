@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	"image"
-	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	webpenc "github.com/gen2brain/webp"
 )
 
 var ffmpegExts = map[string]bool{
@@ -90,7 +91,7 @@ func (g *Gallery) GenerateFFmpegThumbnail(relPath string) (string, error) {
 	}
 	defer f.Close()
 
-	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: g.Quality}); err != nil {
+	if err := webpenc.Encode(f, img, webpenc.Options{Quality: g.Quality}); err != nil {
 		return "", err
 	}
 
