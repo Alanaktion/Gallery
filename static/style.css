@@ -1,0 +1,123 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #111;
+  color: #ddd;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+  padding: 12px 20px;
+}
+
+.breadcrumbs {
+  font-size: 14px;
+}
+
+.crumb {
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+.crumb:hover {
+  text-decoration: underline;
+}
+
+.sep {
+  color: #555;
+  margin: 0 4px;
+}
+
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  align-content: flex-start;
+}
+
+.item {
+  flex: var(--ar, 1) 1 0;
+  min-width: 120px;
+  height: var(--img-h, 250px);
+  overflow: hidden;
+  border-radius: 4px;
+  background: #222;
+  position: relative;
+}
+
+.link {
+  display: block;
+  width: 100%;
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.folder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.folder:hover {
+  background: #2a2a2a;
+  border-color: #555;
+}
+
+.folder-icon {
+  width: 48px;
+  height: 48px;
+  color: #60a5fa;
+  margin-bottom: 8px;
+}
+
+.folder-name {
+  font-size: 13px;
+  text-align: center;
+  padding: 0 8px;
+  word-break: break-word;
+  max-width: 100%;
+  line-height: 1.3;
+  color: #ccc;
+}
+
+.isdir:hover {
+  opacity: 0.85;
+}
+
+.spacer {
+  flex: 9999 1 0;
+  height: 0;
+}
+
+.empty {
+  width: 100%;
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  font-size: 15px;
+}
