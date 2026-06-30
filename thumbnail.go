@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"image"
+	"image/color"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,4 +140,111 @@ func resizeImage(img image.Image, height int, maxAspect float64) image.Image {
 	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
 	draw.BiLinear.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
 	return dst
+}
+
+func cropCenterSquare(img image.Image, size int) image.Image {
+	bounds := img.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+	side := w
+	if h < side {
+		side = h
+	}
+	offsetX := (w - side) / 2
+	offsetY := (h - side) / 2
+
+	dst := image.NewRGBA(image.Rect(0, 0, size, size))
+	draw.BiLinear.Scale(dst, dst.Bounds(), img, image.Rect(offsetX, offsetY, offsetX+side, offsetY+side), draw.Over, nil)
+	return dst
+}
+
+func (g *Gallery) GenerateFolderThumbnail(relPath string) (string, error) {
+	thumbPath := thumbnailPath(relPath, g.CacheDir)
+	dirPath := filepath.Join(g.Root, relPath)
+
+	dirStat, err := os.Stat(dirPath)
+	if err != nil {
+		return "", err
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return "", err
+	}
+
+	var mediaFiles []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || strings.HasPrefix(name, ".") {
+			continue
+		}
+		rel := filepath.Join(relPath, name)
+		if isMedia(rel) {
+			mediaFiles = append(mediaFiles, rel)
+			if len(mediaFiles) >= 4 {
+				break
+			}
+		}
+	}
+
+	if cached, err := os.Stat(thumbPath); err == nil {
+		cacheValid := !dirStat.ModTime().After(cached.ModTime())
+		for _, mf := range mediaFiles {
+			srcPath := filepath.Join(g.Root, mf)
+			srcStat, err := os.Stat(srcPath)
+			if err == nil && srcStat.ModTime().After(cached.ModTime()) {
+				cacheValid = false
+				break
+			}
+		}
+		if cacheValid {
+			return thumbPath, nil
+		}
+	}
+
+	cellSize := g.ImageHeight / 2
+	var images []image.Image
+
+	for _, mf := range mediaFiles {
+		var img image.Image
+		var decodeErr error
+		srcPath := filepath.Join(g.Root, mf)
+		if isNativeImage(mf) {
+			ext := strings.ToLower(filepath.Ext(mf))
+			if ext == ".webp" {
+				img, decodeErr = decodeWebP(srcPath)
+			} else {
+				img, decodeErr = decodeStdImage(srcPath)
+			}
+		}
+		if decodeErr != nil || img == nil {
+			continue
+		}
+		img = cropCenterSquare(img, cellSize)
+		images = append(images, img)
+	}
+
+	composite := image.NewRGBA(image.Rect(0, 0, g.ImageHeight, g.ImageHeight))
+	draw.Draw(composite, composite.Bounds(), image.NewUniform(color.RGBA{30, 30, 30, 255}), image.Point{}, draw.Src)
+
+	for i, img := range images {
+		x := (i % 2) * cellSize
+		y := (i / 2) * cellSize
+		draw.Draw(composite, image.Rect(x, y, x+cellSize, y+cellSize), img, image.Point{}, draw.Over)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(thumbPath), 0755); err != nil {
+		return "", err
+	}
+	f, err := os.Create(thumbPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	if err := webpenc.Encode(f, composite, webpenc.Options{Quality: g.Quality}); err != nil {
+		return "", err
+	}
+
+	return thumbPath, nil
 }

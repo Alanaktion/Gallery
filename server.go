@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -24,7 +26,15 @@ type PageData struct {
 	Breadcrumbs []Breadcrumb
 	Items       []GalleryItem
 	ImageHeight int
+	PageSize    int
+	HasMore     bool
 	Error       string
+}
+
+type browseResponse struct {
+	Items   []GalleryItem `json:"items"`
+	Total   int           `json:"total"`
+	HasMore bool          `json:"hasMore"`
 }
 
 type Breadcrumb struct {
@@ -77,9 +87,34 @@ func (g *Gallery) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := g.ListDir(relPath)
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 1 {
+			page = n
+		}
+	}
+
+	pageSize := g.PageSize
+	if pageSize <= 0 {
+		pageSize = 200
+	}
+	offset := (page - 1) * pageSize
+
+	items, total, err := g.ListDir(relPath, offset, pageSize)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	hasMore := offset+pageSize < total
+
+	if page > 1 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(browseResponse{
+			Items:   items,
+			Total:   total,
+			HasMore: hasMore,
+		})
 		return
 	}
 
@@ -95,6 +130,8 @@ func (g *Gallery) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		Breadcrumbs: buildBreadcrumbs(relPath),
 		Items:       items,
 		ImageHeight: g.ImageHeight,
+		PageSize:    pageSize,
+		HasMore:     hasMore,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -141,14 +178,17 @@ func (g *Gallery) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := os.Stat(absPath); err != nil {
+	info, err := os.Stat(absPath)
+	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
 	var thumbPath string
 
-	if isNativeImage(relPath) {
+	if info.IsDir() {
+		thumbPath, err = g.GenerateFolderThumbnail(relPath)
+	} else if isNativeImage(relPath) {
 		thumbPath, err = g.GenerateThumbnail(relPath)
 	} else if isFFmpegFormat(relPath) {
 		thumbPath, err = g.GenerateFFmpegThumbnail(relPath)
@@ -214,6 +254,8 @@ func mimeType(ext string) string {
 		return "video/x-msvideo"
 	case ".mkv":
 		return "video/x-matroska"
+	case ".svg":
+		return "image/svg+xml"
 	default:
 		return "application/octet-stream"
 	}

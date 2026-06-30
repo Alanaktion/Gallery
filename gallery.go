@@ -19,11 +19,11 @@ import (
 )
 
 type GalleryItem struct {
-	Name        string
-	Path        string
-	IsDir       bool
-	AspectRatio float64
-	Ext         string
+	Name        string  `json:"name"`
+	Path        string  `json:"path"`
+	IsDir       bool    `json:"isDir"`
+	AspectRatio float64 `json:"aspectRatio"`
+	Ext         string  `json:"ext"`
 }
 
 type Gallery struct {
@@ -35,50 +35,66 @@ func NewGallery(cfg Config) *Gallery {
 	return &Gallery{Config: cfg}
 }
 
-func (g *Gallery) ListDir(relPath string) ([]GalleryItem, error) {
+func (g *Gallery) ListDir(relPath string, offset, limit int) ([]GalleryItem, int, error) {
 	absPath := filepath.Join(g.Root, relPath)
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	var items []GalleryItem
+	var all []GalleryItem
 	for _, entry := range entries {
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
-
-		rel := filepath.Join(relPath, name)
-		item := GalleryItem{
+		all = append(all, GalleryItem{
 			Name:  name,
-			Path:  rel,
+			Path:  filepath.Join(relPath, name),
 			IsDir: entry.IsDir(),
 			Ext:   strings.ToLower(filepath.Ext(name)),
-		}
-
-		if !entry.IsDir() {
-			ar, err := g.aspectRatio(rel)
-			if err == nil {
-				item.AspectRatio = ar
-			} else {
-				item.AspectRatio = 1
-			}
-		} else {
-			item.AspectRatio = 1
-		}
-
-		items = append(items, item)
+		})
 	}
 
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].IsDir != items[j].IsDir {
-			return items[i].IsDir
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].IsDir != all[j].IsDir {
+			return all[i].IsDir
 		}
-		return naturalLess(items[i].Name, items[j].Name)
+		return naturalLess(all[i].Name, all[j].Name)
 	})
 
-	return items, nil
+	total := len(all)
+
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	if offset > total {
+		offset = total
+	}
+
+	items := all[offset:end]
+
+	for i := range items {
+		if !items[i].IsDir {
+			ar, err := g.aspectRatio(items[i].Path)
+			if err == nil {
+				items[i].AspectRatio = ar
+			} else {
+				items[i].AspectRatio = 1
+			}
+		} else {
+			items[i].AspectRatio = 1
+		}
+	}
+
+	return items, total, nil
 }
 
 func isMedia(path string) bool {

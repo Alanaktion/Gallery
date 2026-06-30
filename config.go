@@ -13,6 +13,7 @@ type Config struct {
 	CacheDir    string
 	Title       string
 	Quality     int
+	PageSize    int
 }
 
 func LoadConfig() Config {
@@ -24,6 +25,7 @@ func LoadConfig() Config {
 		CacheDir:    envStr("GALLERY_CACHE_DIR", "/tmp/gallery-cache"),
 		Title:       envStr("GALLERY_TITLE", "Gallery"),
 		Quality:     envInt("GALLERY_QUALITY", 85),
+		PageSize:    envInt("GALLERY_PAGE_SIZE", 200),
 	}
 }
 
