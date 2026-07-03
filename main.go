@@ -22,6 +22,14 @@ func main() {
 		log.Println("ffmpeg: not found (AVIF/video thumbnails disabled)")
 	}
 
+	hasRclip = checkRclip()
+	if hasRclip {
+		log.Println("rclip: available")
+		go indexRclip(cfg.Root)
+	} else {
+		log.Println("rclip: not found (semantic search disabled, filename search only)")
+	}
+
 	handler := g.Handler()
 
 	addr := ":" + cfg.Port

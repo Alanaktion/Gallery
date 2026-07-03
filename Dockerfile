@@ -6,9 +6,16 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /gallery .
 
-FROM alpine:3.21
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache ffmpeg ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg ca-certificates python3 python3-pip python3-venv && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/rclip-env && \
+    /opt/rclip-env/bin/pip install --no-cache-dir rclip
+
+ENV PATH="/opt/rclip-env/bin:${PATH}"
 
 COPY --from=builder /gallery /usr/local/bin/gallery
 

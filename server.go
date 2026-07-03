@@ -29,6 +29,8 @@ type PageData struct {
 	PageSize    int
 	HasMore     bool
 	Error       string
+	SearchQuery string
+	IsSearch    bool
 }
 
 type browseResponse struct {
@@ -55,6 +57,7 @@ func (g *Gallery) Handler() http.Handler {
 	mux.HandleFunc("GET /browse/{path...}", g.handleBrowse)
 	mux.HandleFunc("GET /content/{path...}", g.handleContent)
 	mux.HandleFunc("GET /thumbnail/{path...}", g.handleThumbnail)
+	mux.HandleFunc("GET /search", g.handleSearch)
 
 	return mux
 }
@@ -233,6 +236,41 @@ func buildBreadcrumbs(relPath string) []Breadcrumb {
 		crumbs = append(crumbs, Breadcrumb{Name: p, Path: cur})
 	}
 	return crumbs
+}
+
+func (g *Gallery) handleSearch(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" {
+		http.Error(w, "missing search query", http.StatusBadRequest)
+		return
+	}
+
+	results, err := g.Search(query)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tmpl, err := template.ParseFS(templateFS, "templates/gallery.html")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("template error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	data := PageData{
+		Title:       g.Title + " - Search",
+		CurrentPath: "",
+		Items:       results,
+		ImageHeight: g.ImageHeight,
+		PageSize:    len(results),
+		SearchQuery: query,
+		IsSearch:    true,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		log.Printf("template execute: %v", err)
+	}
 }
 
 func mimeType(ext string) string {

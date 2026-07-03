@@ -3,19 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{.Title}}{{if .CurrentPath}} - {{.CurrentPath}}{{end}}</title>
+<title>{{.Title}}{{if .CurrentPath}} - {{.CurrentPath}}{{end}}{{if .SearchQuery}} - "{{.SearchQuery}}"{{end}}</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="topbar">
-  <nav class="breadcrumbs">
-    <a href="/browse/" class="crumb">{{.Title}}</a>
-    {{range .Breadcrumbs}}
-    <span class="sep">/</span><a href="/browse/{{.Path}}" class="crumb">{{.Name}}</a>
-    {{end}}
-  </nav>
+  <div class="topbar-inner">
+    <nav class="breadcrumbs">
+      <a href="/browse/" class="crumb">{{.Title}}</a>
+      {{if .IsSearch}}
+      <span class="sep">/</span><span class="crumb current">Search: {{.SearchQuery}}</span>
+      {{else}}
+      {{range .Breadcrumbs}}
+      <span class="sep">/</span><a href="/browse/{{.Path}}" class="crumb">{{.Name}}</a>
+      {{end}}
+      {{end}}
+    </nav>
+    <form class="search-form" action="/search" method="GET" role="search">
+      <input type="search" name="q" class="search-input" placeholder="Search..." value="{{.SearchQuery}}" autocomplete="off">
+    </form>
+  </div>
 </header>
 <main class="gallery" style="--img-h: {{.ImageHeight}}px">
+  {{if .IsSearch}}
+  <div class="search-info">Search results for <strong>"{{.SearchQuery}}"</strong> &middot; {{len .Items}} match{{if ne (len .Items) 1}}es{{end}}</div>
+  {{end}}
   {{if .Items}}
   {{range .Items}}
   <div class="item{{if .IsDir}} isdir{{end}}" style="--ar: {{printf "%.4f" .AspectRatio}}">
@@ -32,9 +44,9 @@
   </div>
   {{end}}
   <div class="spacer"></div>
-  {{if .HasMore}}<div id="scroll-sentinel" class="sentinel"><div class="spinner"></div></div>{{end}}
+  {{if and .HasMore (not .IsSearch)}}<div id="scroll-sentinel" class="sentinel"><div class="spinner"></div></div>{{end}}
   {{else}}
-  <div class="empty">This directory is empty.</div>
+  <div class="empty">{{if .IsSearch}}No results found for <strong>"{{.SearchQuery}}"</strong>.{{else}}This directory is empty.{{end}}</div>
   {{end}}
 </main>
 <script>
