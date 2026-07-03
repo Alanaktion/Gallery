@@ -30,4 +30,7 @@ ENV GALLERY_CACHE_DIR=/tmp/gallery-cache
 ENV GALLERY_TITLE=Gallery
 ENV GALLERY_QUALITY=85
 
+ENV RCLIP_DATADIR=/tmp/gallery-cache/rclip
+ENV RCLIP_MODEL_CACHE_DIR=/tmp/gallery-cache/rclip-models
+
 ENTRYPOINT ["gallery"]
