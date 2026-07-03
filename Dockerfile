@@ -1,4 +1,4 @@
-FROM golang:1.24-bookworm AS builder
+FROM golang:1.24-trixie AS builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -6,7 +6,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /gallery .
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg ca-certificates python3 python3-pip python3-venv && \
