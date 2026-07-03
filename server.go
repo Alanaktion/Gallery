@@ -188,10 +188,17 @@ func (g *Gallery) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 
 	if info.IsDir() {
 		thumbPath, err = g.GenerateFolderThumbnail(relPath)
+	} else if isFFmpegFormat(relPath) && (!isNativeImage(relPath) || g.ffmpegOK) {
+		if isNativeImage(relPath) {
+			thumbPath, err = g.GenerateThumbnail(relPath)
+			if err != nil && g.ffmpegOK {
+				thumbPath, err = g.GenerateFFmpegThumbnail(relPath)
+			}
+		} else {
+			thumbPath, err = g.GenerateFFmpegThumbnail(relPath)
+		}
 	} else if isNativeImage(relPath) {
 		thumbPath, err = g.GenerateThumbnail(relPath)
-	} else if isFFmpegFormat(relPath) {
-		thumbPath, err = g.GenerateFFmpegThumbnail(relPath)
 	} else {
 		http.Error(w, "unsupported format", http.StatusBadRequest)
 		return
@@ -240,6 +247,8 @@ func mimeType(ext string) string {
 		return "image/webp"
 	case ".avif":
 		return "image/avif"
+	case ".heic", ".heif":
+		return "image/heic"
 	case ".bmp":
 		return "image/bmp"
 	case ".tiff", ".tif":

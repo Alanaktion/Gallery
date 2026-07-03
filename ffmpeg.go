@@ -13,11 +13,14 @@ import (
 
 var ffmpegExts = map[string]bool{
 	".avif": true,
+	".heic": true,
+	".heif": true,
 	".mp4":  true,
 	".mov":  true,
 	".avi":  true,
 	".mkv":  true,
 	".webm": true,
+	".webp": true,
 	".flv":  true,
 	".wmv":  true,
 	".m4v":  true,
@@ -36,6 +39,32 @@ func checkFFmpeg() bool {
 
 func isFFmpegFormat(path string) bool {
 	return ffmpegExts[strings.ToLower(filepath.Ext(path))]
+}
+
+func decodeFFmpegFrame(srcPath string) (image.Image, error) {
+	var buf bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := exec.Command("ffmpeg",
+		"-i", srcPath,
+		"-vframes", "1",
+		"-f", "image2pipe",
+		"-vcodec", "mjpeg",
+		"-q:v", "3",
+		"-")
+	cmd.Stdout = &buf
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		return nil, err
+	}
+
+	return img, nil
 }
 
 func (g *Gallery) GenerateFFmpegThumbnail(relPath string) (string, error) {
@@ -57,24 +86,7 @@ func (g *Gallery) GenerateFFmpegThumbnail(relPath string) (string, error) {
 		}
 	}
 
-	var buf bytes.Buffer
-	var stderr bytes.Buffer
-
-	cmd := exec.Command("ffmpeg",
-		"-i", srcPath,
-		"-vframes", "1",
-		"-f", "image2pipe",
-		"-vcodec", "mjpeg",
-		"-q:v", "3",
-		"-")
-	cmd.Stdout = &buf
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-
-	img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
+	img, err := decodeFFmpegFrame(srcPath)
 	if err != nil {
 		return "", err
 	}

@@ -102,7 +102,7 @@ func isMedia(path string) bool {
 	switch ext {
 	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp":
 		return true
-	case ".avif", ".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".m4v", ".mpg", ".mpeg":
+	case ".avif", ".heic", ".heif", ".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".m4v", ".mpg", ".mpeg":
 		return true
 	}
 	return false

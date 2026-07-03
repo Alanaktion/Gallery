@@ -209,12 +209,17 @@ func (g *Gallery) GenerateFolderThumbnail(relPath string) (string, error) {
 		var img image.Image
 		var decodeErr error
 		srcPath := filepath.Join(g.Root, mf)
+		ext := strings.ToLower(filepath.Ext(mf))
 		if isNativeImage(mf) {
-			ext := strings.ToLower(filepath.Ext(mf))
 			if ext == ".webp" {
 				img, decodeErr = decodeWebP(srcPath)
 			} else {
 				img, decodeErr = decodeStdImage(srcPath)
+			}
+		}
+		if decodeErr != nil || img == nil {
+			if ext == ".webp" && g.ffmpegOK {
+				img, decodeErr = decodeFFmpegFrame(srcPath)
 			}
 		}
 		if decodeErr != nil || img == nil {
