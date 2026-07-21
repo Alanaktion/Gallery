@@ -43,13 +43,30 @@ document.getElementById('btn-list-view').addEventListener('click', () => {
 // ── Fit-mode toggle ──────────────────────────────────────────
 
 function applyFitMode() {
-  document.getElementById('fs-img').style.objectFit = fitMode;
-  document.getElementById('fs-vid').style.objectFit = fitMode;
-  document.getElementById('btn-fit').classList.toggle('active', fitMode === 'contain');
+  const img = document.getElementById('fs-img');
+  const vid = document.getElementById('fs-vid');
+  const fsEl = document.getElementById('fullscreen');
+
+  if (fitMode === 'fit-width') {
+    img.style.objectFit = 'none';
+    img.style.width = '100vw';
+    img.style.height = 'auto';
+    vid.style.objectFit = 'cover';
+    fsEl.classList.add('fit-width');
+  } else {
+    img.style.objectFit = fitMode;
+    img.style.width = '';
+    img.style.height = '';
+    vid.style.objectFit = fitMode;
+    fsEl.classList.remove('fit-width');
+  }
+  document.getElementById('btn-fit').classList.toggle('active', fitMode !== 'scale-down');
 }
 
 function toggleFitMode() {
-  fitMode = fitMode === 'scale-down' ? 'contain' : 'scale-down';
+  if (fitMode === 'scale-down') fitMode = 'contain';
+  else if (fitMode === 'contain') fitMode = 'fit-width';
+  else fitMode = 'scale-down';
   localStorage.setItem('galleryFit', fitMode);
   applyFitMode();
 }
@@ -345,6 +362,7 @@ function closeFSUI() {
   document.getElementById('fs-img').style.display = 'none';
   document.getElementById('fs-img').src = '';
   document.getElementById('fullscreen').style.display = 'none';
+  document.getElementById('fullscreen').classList.remove('fit-width');
   document.getElementById('browse').style.display = 'block';
 }
 
@@ -395,6 +413,7 @@ function updateFSMedia() {
   if (fsHistoryPushed) {
     history.replaceState({ path: dirPath, fullscreen: true, mediaIdx }, '');
   }
+  applyFitMode();
 }
 
 function removeCurrentAndAdvance() {

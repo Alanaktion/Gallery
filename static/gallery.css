@@ -166,6 +166,9 @@ body {
   z-index: 100;
   user-select: none;
 }
+#fullscreen.fit-width {
+  overflow-y: auto;
+}
 
 #fs-img, #fs-vid {
   width: 100%;
