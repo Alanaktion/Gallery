@@ -48,6 +48,9 @@ func (g *Gallery) ListDir(relPath string, offset, limit int) ([]GalleryItem, int
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
+		if !entry.IsDir() && !isMedia(name) {
+			continue
+		}
 		all = append(all, GalleryItem{
 			Name:  name,
 			Path:  filepath.Join(relPath, name),

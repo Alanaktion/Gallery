@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,7 +112,16 @@ func decodeWebP(path string) (image.Image, error) {
 	}
 	defer f.Close()
 
-	return webp.Decode(f)
+	if img, err := webp.Decode(f); err == nil {
+		return img, nil
+	}
+
+	// x/image can't decode animated WebP (ANIM/ANMF chunks), so fall back
+	// to libwebp which decodes the first frame.
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return webpenc.Decode(f)
 }
 
 func resizeImage(img image.Image, height int, maxAspect float64) image.Image {

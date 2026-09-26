@@ -53,7 +53,7 @@
 (function(){
 var page = 1;
 var pageSize = {{.PageSize}};
-var path = {{printf "%q" .CurrentPath}};
+var path = {{.CurrentPathJS}};
 var hasMore = {{.HasMore}};
 var loading = false;
 var sentinel = document.getElementById('scroll-sentinel');

@@ -221,6 +221,22 @@ func (g *Gallery) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, thumbPath)
 }
 
+// mustJSON marshals a string to a JSON string literal for embedding in JS.
+func mustJSON(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return `""`
+	}
+	return string(b)
+}
+
+// CurrentPathJS renders CurrentPath as a JS string literal for the
+// infinite-scroll script. html/template would otherwise escape the
+// quotes produced by printf "%q", corrupting the fetch URL.
+func (p PageData) CurrentPathJS() template.JS {
+	return template.JS(mustJSON(p.CurrentPath))
+}
+
 func buildBreadcrumbs(relPath string) []Breadcrumb {
 	if relPath == "" {
 		return nil
