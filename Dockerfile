@@ -29,6 +29,7 @@ ENV GALLERY_MAX_ASPECT=2.0
 ENV GALLERY_CACHE_DIR=/tmp/gallery-cache
 ENV GALLERY_TITLE=Gallery
 ENV GALLERY_QUALITY=85
+ENV GALLERY_FILE_EXTS=.zip,.rar,.7z,.tar,.gz,.tgz,.bz2,.xz,.pdf,.txt,.md,.doc,.docx,.odt,.rtf,.epub,.csv,.json,.xml,.gpx,.log,.nfo,.srt,.vtt,.yaml,.yml
 
 ENV RCLIP_DATADIR=/tmp/gallery-cache/rclip
 ENV RCLIP_MODEL_CACHE_DIR=/tmp/gallery-cache/rclip-models

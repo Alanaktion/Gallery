@@ -13,6 +13,7 @@ func main() {
 	log.Printf("image height: %dpx", cfg.ImageHeight)
 	log.Printf("max aspect: %.1f", cfg.MaxAspect)
 	log.Printf("cache dir: %s", cfg.CacheDir)
+	log.Printf("file exts: %v", cfg.FileExts)
 
 	g := NewGallery(cfg)
 	g.ffmpegOK = checkFFmpeg()

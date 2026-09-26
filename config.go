@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -14,6 +15,18 @@ type Config struct {
 	Title       string
 	Quality     int
 	PageSize    int
+	// FileExts lists non-media extensions shown as downloadable file
+	// tiles (e.g. .txt, .zip). Empty disables the feature.
+	FileExts []string
+}
+
+var defaultFileExts = []string{
+	// archives
+	".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz",
+	// documents
+	".pdf", ".txt", ".md", ".doc", ".docx", ".odt", ".rtf", ".epub",
+	// data & subtitle/text files
+	".csv", ".json", ".xml", ".gpx", ".log", ".nfo", ".srt", ".vtt", ".yaml", ".yml",
 }
 
 func LoadConfig() Config {
@@ -26,6 +39,7 @@ func LoadConfig() Config {
 		Title:       envStr("GALLERY_TITLE", "Gallery"),
 		Quality:     envInt("GALLERY_QUALITY", 85),
 		PageSize:    envInt("GALLERY_PAGE_SIZE", 200),
+		FileExts:    envExtList("GALLERY_FILE_EXTS", defaultFileExts),
 	}
 }
 
@@ -52,4 +66,29 @@ func envFloat(key string, def float64) float64 {
 		}
 	}
 	return def
+}
+
+// envExtList parses a comma-separated extension list like ".txt, .zip".
+// Unset returns the default; set-but-empty disables the list entirely.
+func envExtList(key string, def []string) []string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, e := range strings.Split(v, ",") {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e == "" {
+			continue
+		}
+		if !strings.HasPrefix(e, ".") {
+			e = "." + e
+		}
+		if !seen[e] {
+			seen[e] = true
+			out = append(out, e)
+		}
+	}
+	return out
 }

@@ -121,7 +121,7 @@ func (g *Gallery) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl, err := template.ParseFS(templateFS, "templates/gallery.html")
+	tmpl, err := galleryTemplate()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("template error: %v", err), http.StatusInternalServerError)
 		return
@@ -162,7 +162,7 @@ func (g *Gallery) handleContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isMedia(relPath) {
+	if !isMedia(relPath) && !g.isExtraFile(relPath) {
 		http.Error(w, "unsupported media type", http.StatusBadRequest)
 		return
 	}
@@ -221,6 +221,19 @@ func (g *Gallery) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, thumbPath)
 }
 
+// galleryTemplate parses the gallery page template with its helper funcs.
+// The root name must match the file's base name so Execute renders it.
+func galleryTemplate() (*template.Template, error) {
+	return template.New("gallery.html").Funcs(template.FuncMap{
+		"extLabel": extLabel,
+	}).ParseFS(templateFS, "templates/gallery.html")
+}
+
+// extLabel renders an extension like ".zip" as "ZIP" for file tiles.
+func extLabel(ext string) string {
+	return strings.ToUpper(strings.TrimPrefix(ext, "."))
+}
+
 // mustJSON marshals a string to a JSON string literal for embedding in JS.
 func mustJSON(s string) string {
 	b, err := json.Marshal(s)
@@ -267,7 +280,7 @@ func (g *Gallery) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl, err := template.ParseFS(templateFS, "templates/gallery.html")
+	tmpl, err := galleryTemplate()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("template error: %v", err), http.StatusInternalServerError)
 		return
@@ -319,6 +332,48 @@ func mimeType(ext string) string {
 		return "video/x-matroska"
 	case ".svg":
 		return "image/svg+xml"
+	case ".txt":
+		return "text/plain; charset=utf-8"
+	case ".md", ".markdown":
+		return "text/markdown; charset=utf-8"
+	case ".csv", ".tsv":
+		return "text/csv; charset=utf-8"
+	case ".json":
+		return "application/json"
+	case ".xml", ".gpx", ".kml":
+		return "application/xml"
+	case ".pdf":
+		return "application/pdf"
+	case ".zip":
+		return "application/zip"
+	case ".rar":
+		return "application/vnd.rar"
+	case ".7z":
+		return "application/x-7z-compressed"
+	case ".tar":
+		return "application/x-tar"
+	case ".gz", ".tgz":
+		return "application/gzip"
+	case ".bz2":
+		return "application/x-bzip2"
+	case ".xz":
+		return "application/x-xz"
+	case ".doc":
+		return "application/msword"
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case ".odt":
+		return "application/vnd.oasis.opendocument.text"
+	case ".rtf":
+		return "application/rtf"
+	case ".epub":
+		return "application/epub+zip"
+	case ".yaml", ".yml":
+		return "application/yaml"
+	case ".vtt":
+		return "text/vtt; charset=utf-8"
+	case ".srt", ".sub":
+		return "application/x-subrip"
 	default:
 		return "application/octet-stream"
 	}

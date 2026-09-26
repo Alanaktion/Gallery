@@ -31,16 +31,25 @@
   {{if .Items}}
   {{range .Items}}
   <div class="item{{if .IsDir}} isdir{{end}}" style="--ar: {{printf "%.4f" .AspectRatio}}">
-    <a href="{{if .IsDir}}/browse/{{.Path}}{{else}}/content/{{.Path}}{{end}}" class="link">
-      {{if .IsDir}}
+    {{if .IsDir}}
+    <a href="/browse/{{.Path}}" class="link">
       <div class="folder">
         <img src="/thumbnail/{{.Path}}" alt="{{.Name}}" loading="lazy" class="folder-thumb">
         <span class="folder-name">{{.Name}}</span>
       </div>
-      {{else}}
-      <img src="/thumbnail/{{.Path}}" alt="{{.Name}}" loading="lazy" class="thumb">
-      {{end}}
     </a>
+    {{else if .FileKind}}
+    <a href="/content/{{.Path}}" class="link">
+      <div class="file">
+        <div class="file-icon file-{{.FileKind}}"><span>{{extLabel .Ext}}</span></div>
+        <span class="file-name">{{.Name}}</span>
+      </div>
+    </a>
+    {{else}}
+    <a href="/content/{{.Path}}" class="link">
+      <img src="/thumbnail/{{.Path}}" alt="{{.Name}}" loading="lazy" class="thumb">
+    </a>
+    {{end}}
   </div>
   {{end}}
   <div class="spacer"></div>
@@ -88,6 +97,20 @@ var observer = new IntersectionObserver(async function(entries) {
         span.textContent = item.name;
         folder.appendChild(span);
         a.appendChild(folder);
+      } else if (item.fileKind) {
+        var file = document.createElement('div');
+        file.className = 'file';
+        var icon = document.createElement('div');
+        icon.className = 'file-icon file-' + item.fileKind;
+        var label = document.createElement('span');
+        label.textContent = item.ext.replace(/^\./, '').toUpperCase();
+        icon.appendChild(label);
+        var fname = document.createElement('span');
+        fname.className = 'file-name';
+        fname.textContent = item.name;
+        file.appendChild(icon);
+        file.appendChild(fname);
+        a.appendChild(file);
       } else {
         var img = document.createElement('img');
         img.src = '/thumbnail/' + item.path;

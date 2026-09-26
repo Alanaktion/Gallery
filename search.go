@@ -44,7 +44,8 @@ func (g *Gallery) filenameSearch(query string) ([]GalleryItem, error) {
 		if d.IsDir() || strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
-		if !isMedia(path) {
+		media := isMedia(path)
+		if !media && !g.isExtraFile(path) {
 			return nil
 		}
 		if strings.Contains(strings.ToLower(d.Name()), q) {
@@ -61,11 +62,16 @@ func (g *Gallery) filenameSearch(query string) ([]GalleryItem, error) {
 				IsDir: false,
 				Ext:   strings.ToLower(filepath.Ext(d.Name())),
 			}
-			ar, err := g.aspectRatio(item.Path)
-			if err == nil {
-				item.AspectRatio = ar
-			} else {
+			if !media {
+				item.FileKind = fileKind(item.Ext)
 				item.AspectRatio = 1
+			} else {
+				ar, err := g.aspectRatio(item.Path)
+				if err == nil {
+					item.AspectRatio = ar
+				} else {
+					item.AspectRatio = 1
+				}
 			}
 			results = append(results, item)
 		}

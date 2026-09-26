@@ -9,9 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
-	"unicode"
 
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/tiff"
@@ -24,15 +22,45 @@ type GalleryItem struct {
 	IsDir       bool    `json:"isDir"`
 	AspectRatio float64 `json:"aspectRatio"`
 	Ext         string  `json:"ext"`
+	// FileKind is set for listed non-media files (archive, text, doc,
+	// data, file) so the UI can render them as file tiles.
+	FileKind string `json:"fileKind"`
 }
 
 type Gallery struct {
 	Config
-	ffmpegOK bool
+	ffmpegOK  bool
+	extraExts map[string]bool
 }
 
 func NewGallery(cfg Config) *Gallery {
-	return &Gallery{Config: cfg}
+	extra := make(map[string]bool, len(cfg.FileExts))
+	for _, e := range cfg.FileExts {
+		extra[e] = true
+	}
+	return &Gallery{Config: cfg, extraExts: extra}
+}
+
+// isExtraFile reports whether name is a configured non-media file to list.
+func (g *Gallery) isExtraFile(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return g.extraExts[ext]
+}
+
+// fileKind maps a non-media extension to an icon category.
+func fileKind(ext string) string {
+	switch ext {
+	case ".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz":
+		return "archive"
+	case ".txt", ".md", ".markdown", ".log", ".nfo", ".srt", ".vtt", ".sub":
+		return "text"
+	case ".pdf", ".doc", ".docx", ".odt", ".rtf", ".epub":
+		return "doc"
+	case ".csv", ".tsv", ".json", ".xml", ".gpx", ".kml", ".yaml", ".yml", ".toml":
+		return "data"
+	default:
+		return "file"
+	}
 }
 
 func (g *Gallery) ListDir(relPath string, offset, limit int) ([]GalleryItem, int, error) {
@@ -48,15 +76,19 @@ func (g *Gallery) ListDir(relPath string, offset, limit int) ([]GalleryItem, int
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
-		if !entry.IsDir() && !isMedia(name) {
+		if !entry.IsDir() && !isMedia(name) && !g.isExtraFile(name) {
 			continue
 		}
-		all = append(all, GalleryItem{
+		item := GalleryItem{
 			Name:  name,
 			Path:  filepath.Join(relPath, name),
 			IsDir: entry.IsDir(),
 			Ext:   strings.ToLower(filepath.Ext(name)),
-		})
+		}
+		if !entry.IsDir() && !isMedia(name) {
+			item.FileKind = fileKind(item.Ext)
+		}
+		all = append(all, item)
 	}
 
 	sort.Slice(all, func(i, j int) bool {
@@ -85,13 +117,13 @@ func (g *Gallery) ListDir(relPath string, offset, limit int) ([]GalleryItem, int
 	items := all[offset:end]
 
 	for i := range items {
-		if !items[i].IsDir {
-			ar, err := g.aspectRatio(items[i].Path)
-			if err == nil {
-				items[i].AspectRatio = ar
-			} else {
-				items[i].AspectRatio = 1
-			}
+		if items[i].IsDir || items[i].FileKind != "" {
+			items[i].AspectRatio = 1
+			continue
+		}
+		ar, err := g.aspectRatio(items[i].Path)
+		if err == nil {
+			items[i].AspectRatio = ar
 		} else {
 			items[i].AspectRatio = 1
 		}
@@ -156,52 +188,81 @@ func safeJoin(root, rel string) (string, error) {
 	return abs, nil
 }
 
-type segment struct {
-	num   int
-	text  string
+type natSegment struct {
 	isNum bool
+	// key is the comparison key: lowercased text for text segments, or
+	// the digit run with leading zeros stripped for numeric segments.
+	key string
+	// raw is the original segment text, used as a deterministic tie-break.
+	raw string
 }
 
+// naturalLess orders names the way humans expect: case-insensitively,
+// with digit runs compared by numeric value, so "asdf1" sorts before
+// "Asdf02" and "img2" before "img10".
 func naturalLess(a, b string) bool {
 	segsA := splitNatural(a)
 	segsB := splitNatural(b)
 
 	for i := 0; i < len(segsA) && i < len(segsB); i++ {
-		if segsA[i].isNum && segsB[i].isNum {
-			if segsA[i].num != segsB[i].num {
-				return segsA[i].num < segsB[i].num
-			}
-		} else if !segsA[i].isNum && !segsB[i].isNum {
-			if segsA[i].text != segsB[i].text {
-				return segsA[i].text < segsB[i].text
-			}
-		} else {
-			return segsA[i].isNum
+		if c := cmpNatSeg(segsA[i], segsB[i]); c != 0 {
+			return c < 0
 		}
 	}
-	return len(segsA) < len(segsB)
+	if len(segsA) != len(segsB) {
+		return len(segsA) < len(segsB)
+	}
+	// Deterministic tie-break on original case for names that are
+	// equal case-insensitively (e.g. "A.png" before "a.png").
+	for i := range segsA {
+		if segsA[i].raw != segsB[i].raw {
+			return segsA[i].raw < segsB[i].raw
+		}
+	}
+	return false
 }
 
-func splitNatural(s string) []segment {
-	var segs []segment
+// cmpNatSeg compares two segments by key only: numeric segments by value
+// (longer digit run wins; equal lengths compare lexicographically, so
+// there is no Atoi overflow), text segments case-insensitively.
+func cmpNatSeg(sa, sb natSegment) int {
+	switch {
+	case sa.isNum && sb.isNum:
+		if len(sa.key) != len(sb.key) {
+			if len(sa.key) < len(sb.key) {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(sa.key, sb.key)
+	case !sa.isNum && !sb.isNum:
+		return strings.Compare(sa.key, sb.key)
+	case sa.isNum:
+		return -1
+	default:
+		return 1
+	}
+}
+
+func splitNatural(s string) []natSegment {
+	var segs []natSegment
 	i := 0
 	for i < len(s) {
-		if unicode.IsDigit(rune(s[i])) {
-			j := i
-			for j < len(s) && unicode.IsDigit(rune(s[j])) {
+		j := i
+		if s[i] >= '0' && s[i] <= '9' {
+			for j < len(s) && s[j] >= '0' && s[j] <= '9' {
 				j++
 			}
-			n, _ := strconv.Atoi(s[i:j])
-			segs = append(segs, segment{num: n, isNum: true})
-			i = j
+			raw := s[i:j]
+			segs = append(segs, natSegment{isNum: true, key: strings.TrimLeft(raw, "0"), raw: raw})
 		} else {
-			j := i
-			for j < len(s) && !unicode.IsDigit(rune(s[j])) {
+			for j < len(s) && (s[j] < '0' || s[j] > '9') {
 				j++
 			}
-			segs = append(segs, segment{text: s[i:j], isNum: false})
-			i = j
+			raw := s[i:j]
+			segs = append(segs, natSegment{key: strings.ToLower(raw), raw: raw})
 		}
+		i = j
 	}
 	return segs
 }

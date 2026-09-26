@@ -46,6 +46,12 @@ services:
 | `GALLERY_CACHE_DIR` | `/tmp/gallery-cache` | Thumbnail cache directory |
 | `GALLERY_TITLE` | `Gallery` | Page title shown in browser tab and breadcrumbs |
 | `GALLERY_QUALITY` | `85` | JPEG thumbnail quality (1-100) |
+| `GALLERY_PAGE_SIZE` | `200` | Items per page for infinite scroll |
+| `GALLERY_FILE_EXTS` | see below | Comma-separated non-media extensions shown as file tiles; set empty to hide them |
+
+Default `GALLERY_FILE_EXTS`: `.zip`, `.rar`, `.7z`, `.tar`, `.gz`, `.tgz`, `.bz2`, `.xz`,
+`.pdf`, `.txt`, `.md`, `.doc`, `.docx`, `.odt`, `.rtf`, `.epub`,
+`.csv`, `.json`, `.xml`, `.gpx`, `.log`, `.nfo`, `.srt`, `.vtt`, `.yaml`, `.yml`.
 
 ## Formats
 
