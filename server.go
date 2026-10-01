@@ -217,7 +217,13 @@ func (g *Gallery) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "image/webp")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	// Thumbnail URLs are unversioned and the cached file is regenerated when
+	// the source changes, so allow only a short freshness window and then
+	// revalidate cheaply via ETag/Last-Modified (http.ServeFile answers 304).
+	if st, err := os.Stat(thumbPath); err == nil {
+		w.Header().Set("ETag", fmt.Sprintf(`"%x-%x"`, st.ModTime().UnixNano(), st.Size()))
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
 	http.ServeFile(w, r, thumbPath)
 }
 
