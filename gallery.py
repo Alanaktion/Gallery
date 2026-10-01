@@ -7,6 +7,7 @@ import mimetypes
 import re
 import shutil
 import sys
+from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -198,13 +199,24 @@ class Handler(BaseHTTPRequestHandler):
 
         mime = mimetypes.guess_type(abs_path.name)[
             0] or 'application/octet-stream'
-        size = abs_path.stat().st_size
+        st = abs_path.stat()
+        size = st.st_size
+        etag = f'"{st.st_mtime_ns:x}-{size:x}"'
+        last_modified = formatdate(st.st_mtime, usegmt=True)
+        self._cache_headers = (etag, last_modified)
         range_header = self.headers.get('Range', '').strip()
+
+        if self._not_modified(etag, st.st_mtime):
+            self.send_response(304)
+            self._send_cache_headers()
+            self.end_headers()
+            return
 
         if range_header.startswith('bytes='):
             self._serve_range(abs_path, mime, size, range_header[6:])
         else:
             self.send_response(200)
+            self._send_cache_headers()
             self.send_header('Content-Type', mime)
             self.send_header('Content-Length', str(size))
             self.send_header('Accept-Ranges', 'bytes')
@@ -215,6 +227,25 @@ class Handler(BaseHTTPRequestHandler):
                     shutil.copyfileobj(f, self.wfile)
             except OSError:
                 pass
+
+    def _send_cache_headers(self) -> None:
+        etag, last_modified = self._cache_headers
+        self.send_header('Cache-Control', 'private, max-age=3600')
+        self.send_header('ETag', etag)
+        self.send_header('Last-Modified', last_modified)
+
+    def _not_modified(self, etag: str, mtime: float) -> bool:
+        inm = self.headers.get('If-None-Match')
+        if inm:
+            tags = [t.strip().removeprefix('W/') for t in inm.split(',')]
+            return '*' in tags or etag in tags
+        ims = self.headers.get('If-Modified-Since')
+        if ims:
+            try:
+                return int(mtime) <= parsedate_to_datetime(ims).timestamp()
+            except (TypeError, ValueError):
+                return False
+        return False
 
     def _serve_range(
             self,
@@ -252,6 +283,7 @@ class Handler(BaseHTTPRequestHandler):
         length = end - start + 1
 
         self.send_response(206)
+        self._send_cache_headers()
         self.send_header('Content-Type', mime)
         self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
         self.send_header('Content-Length', str(length))

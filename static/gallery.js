@@ -192,15 +192,24 @@ function renderGrid(data, container) {
   for (let i = 0; i < data.media.length; i++) {
     const {name, type} = data.media[i];
     const item = type === 'video' ? makeGridVideo(name) : makeGridImage(name, i);
-    if (type === 'image') {
-      // img src set inside makeGridImage
-    }
-    const idx = i;
-    item.addEventListener('click', () => openFS(idx));
+    bindOpenFS(item, i);
     grid.appendChild(item);
   }
 
   container.appendChild(grid);
+}
+
+function mediaHref(name) {
+  return '/files/' + encPath(joinPath(dirPath, name));
+}
+
+function bindOpenFS(el, idx) {
+  el.addEventListener('click', e => {
+    if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      openFS(idx);
+    }
+  });
 }
 
 function makeGridFolder(name, hasFav, targetPath) {
@@ -222,9 +231,9 @@ function makeGridFolder(name, hasFav, targetPath) {
 }
 
 function makeGridImage(name, idx) {
-  const item = document.createElement('button');
+  const item = document.createElement('a');
   item.className = 'item';
-  item.type = 'button';
+  item.href = mediaHref(name);
 
   const thumb = document.createElement('img');
   thumb.className = 'item-thumb';
@@ -242,9 +251,9 @@ function makeGridImage(name, idx) {
 }
 
 function makeGridVideo(name) {
-  const item = document.createElement('button');
+  const item = document.createElement('a');
   item.className = 'item';
-  item.type = 'button';
+  item.href = mediaHref(name);
 
   const icon = document.createElement('div');
   icon.className = 'item-icon video-icon';
@@ -308,9 +317,9 @@ function renderList(data, container) {
     const li = document.createElement('li');
     li.className = 'list-item';
 
-    const btn = document.createElement('button');
+    const btn = document.createElement('a');
     btn.className = 'list-btn';
-    btn.type = 'button';
+    btn.href = mediaHref(name);
 
     const icon = document.createElement('span');
     icon.className = 'list-icon';
@@ -323,8 +332,7 @@ function renderList(data, container) {
     btn.appendChild(icon);
     btn.appendChild(nm);
 
-    const idx = i;
-    btn.addEventListener('click', () => openFS(idx));
+    bindOpenFS(btn, i);
     li.appendChild(btn);
     ul.appendChild(li);
   }
@@ -389,7 +397,7 @@ function closeFS(fromPopstate = false) {
 
 function updateFSMedia() {
   const item = dirMedia[mediaIdx];
-  const src = '/files/' + encPath(joinPath(dirPath, item.name));
+  const src = mediaHref(item.name);
   const img = document.getElementById('fs-img');
   const vid = document.getElementById('fs-vid');
 
@@ -414,6 +422,15 @@ function updateFSMedia() {
     history.replaceState({ path: dirPath, fullscreen: true, mediaIdx }, '');
   }
   applyFitMode();
+  preloadNext();
+}
+
+let preloadImg = null;
+function preloadNext() {
+  const next = dirMedia[mediaIdx + 1];
+  if (!next || next.type !== 'image') return;
+  preloadImg = new Image();
+  preloadImg.src = mediaHref(next.name);
 }
 
 function removeCurrentAndAdvance() {
