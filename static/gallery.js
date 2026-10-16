@@ -24,6 +24,14 @@ function encPath(p) {
   return p.split('/').map(encodeURIComponent).join('/');
 }
 
+function inFavDir() {
+  return dirPath.split('/').pop() === 'fav';
+}
+
+function inTrashDir() {
+  return dirPath.split('/').pop() === 'trash';
+}
+
 // ── View toggle ─────────────────────────────────────────────
 
 function setViewMode(mode) {
@@ -176,11 +184,17 @@ async function navigate(path, historyMode = 'push') {
   lastData = data;
   renderBreadcrumb();
   renderMedia(data);
-  document.getElementById('btn-empty-trash').style.display = data.has_trash ? '' : 'none';
-  const showEmptyNonFavs = data.has_fav && data.media.length;
+  document.getElementById('btn-empty-trash').style.display = data.has_trash && data.can_delete ? '' : 'none';
+  const showEmptyNonFavs = data.has_fav && data.media.length && data.can_delete;
   document.getElementById('btn-empty-nonfavs').style.display = showEmptyNonFavs ? '' : 'none';
-  document.getElementById('btn-favdir').style.display = dirPath !== '' ? '' : 'none';
-  const showDeleteDir = dirPath !== '' && !data.has_trash && !data.has_fav && !data.dirs.length;
+  // Server rejects favoriting fav/ and trash/ dirs or dirs already inside a fav/
+  const parts = dirPath.split('/');
+  const showFavDir = dirPath !== '' && data.can_fav
+    && !['fav', 'trash'].includes(parts.at(-1)) && parts.at(-2) !== 'fav';
+  document.getElementById('btn-favdir').style.display = showFavDir ? '' : 'none';
+  updateFavBtn(data);
+  document.getElementById('btn-del').style.display = inTrashDir() ? 'none' : '';
+  const showDeleteDir = dirPath !== '' && data.can_delete && !data.has_trash && !data.has_fav && !data.dirs.length;
   document.getElementById('btn-delete-dir').style.display = showDeleteDir ? '' : 'none';
 }
 
@@ -309,7 +323,7 @@ function makeGridImage(name, idx) {
 
   const thumb = document.createElement('img');
   thumb.className = 'item-thumb';
-  thumb.src = '/files/' + encPath(joinPath(dirPath, name));
+  thumb.src = mediaHref(name);
   thumb.loading = 'lazy';
   thumb.alt = name;
 
@@ -554,6 +568,9 @@ fsEl.addEventListener('touchstart', showControls, { passive: true });
 // ── Keyboard shortcuts ────────────────────────────────────────
 
 document.addEventListener('keydown', e => {
+  // Leave browser shortcuts (Ctrl+F, Ctrl+D, Alt+←, …) alone
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
   if (e.key === 'Backspace' && fsEl.style.display !== 'block' && dirPath !== '') {
     const parentPath = dirPath.includes('/') ? dirPath.slice(0, dirPath.lastIndexOf('/')) : '';
     navigate(parentPath);
@@ -596,9 +613,9 @@ document.addEventListener('keydown', e => {
       if (zoomed) setZoom(false);
       else closeFS();
       handled = true;
-    } else if (e.key === 'f' || e.key === 'F') {
+    } else if ((e.key === 'f' || e.key === 'F') && document.getElementById('btn-fav').style.display !== 'none') {
       document.getElementById('btn-fav').click(); handled = true;
-    } else if (e.key === 'Delete' || e.key === 'd' || e.key === 'D') {
+    } else if ((e.key === 'Delete' || e.key === 'd' || e.key === 'D') && document.getElementById('btn-del').style.display !== 'none') {
       document.getElementById('btn-del').click(); handled = true;
     } else if (e.key === 'z' || e.key === 'Z') {
       toggleFitMode(); handled = true;
@@ -611,7 +628,11 @@ document.addEventListener('keydown', e => {
   }
 });
 
+let actionPending = false;  // prevents acting on the same item twice before it's removed
+
 async function postAction(endpoint) {
+  if (actionPending) return false;
+  actionPending = true;
   const item = dirMedia[mediaIdx];
   // Release video resource before the server moves the file
   if (item.type === 'video') stopVideo();
@@ -626,12 +647,32 @@ async function postAction(endpoint) {
     if (res.ok) return true;
     const d = await res.json().catch(() => ({}));
     showToast('Error: ' + (d.error || res.status));
-  } catch { showToast('Network error'); }
+  } catch {
+    showToast('Network error');
+  } finally {
+    actionPending = false;
+  }
+  // Reload the video stopped above
+  if (item.type === 'video' && fsEl.style.display === 'block') updateFSMedia();
   return false;
 }
 
+// In a fav/ dir the fav button un-favorites; elsewhere it's hidden if favoriting is blocked
+function updateFavBtn(data) {
+  const btn = document.getElementById('btn-fav');
+  const unfav = inFavDir();
+  btn.style.display = unfav || data.can_fav ? '' : 'none';
+  btn.classList.toggle('active', unfav);
+  btn.title = unfav ? 'Remove from favorites (F)' : 'Add to favorites (F)';
+}
+
 document.getElementById('btn-fav').addEventListener('click', async () => {
-  if (await postAction('/api/favorite')) {
+  if (inFavDir()) {
+    if (await postAction('/api/unfavorite')) {
+      showToast('☆ Removed from favorites');
+      removeCurrentAndAdvance();
+    }
+  } else if (await postAction('/api/favorite')) {
     showToast('★ Added to favorites');
     removeCurrentAndAdvance();
   }

@@ -2,8 +2,10 @@
 """Lightweight image gallery server."""
 
 import argparse
+import html
 import json
 import mimetypes
+import os
 import re
 import shutil
 import sys
@@ -19,6 +21,23 @@ ALL_MEDIA_EXTS = IMAGE_EXTS | VIDEO_EXTS
 
 ROOT: Path = Path('.')  # resolved absolute path, set in main()
 STATIC_DIR: Path = Path(__file__).parent / 'static'
+
+# Relative path prefixes where favoriting is disabled, from the
+# GALLERY_NO_FAV env var (os.pathsep-separated, e.g. "Screenshots:Phone/DCIM")
+NO_FAV_PREFIXES: list[str] = [
+    p.strip('/') for p in os.environ.get('GALLERY_NO_FAV', '').split(os.pathsep)
+    if p.strip('/')
+]
+
+# Page <title>, from the GALLERY_TITLE env var
+TITLE: str = os.environ.get('GALLERY_TITLE') or 'Review'
+
+# Disable permanent deletion endpoints if GALLERY_NO_DELETE is set (to
+# anything but "", "0", "false" or "no"). Moving to trash is still allowed.
+NO_DELETE: bool = os.environ.get('GALLERY_NO_DELETE', '').strip().lower() \
+    not in ('', '0', 'false', 'no')
+PERMANENT_DELETE_ROUTES = {
+    '/api/empty-trash', '/api/empty-nonfavs', '/api/delete-dir'}
 
 
 def natural_key(s: str) -> list:
@@ -49,9 +68,18 @@ def resolve_safe(rel: str) -> Path | None:
     try:
         p = (ROOT / rel).resolve()
         p.relative_to(ROOT)  # raises ValueError if outside ROOT
-        return p
     except (ValueError, OSError):
         return None
+    # ROOT is resolved and rel has no ./.. parts, so any difference means a
+    # symlink was followed somewhere along the path
+    if p != ROOT / rel:
+        return None
+    return p
+
+
+def fav_blocked(rel: str) -> bool:
+    """Return True if rel is at or under a NO_FAV_PREFIXES entry."""
+    return any(rel == p or rel.startswith(p + '/') for p in NO_FAV_PREFIXES)
 
 
 def unique_dest(dest_dir: Path, name: str) -> Path:
@@ -108,12 +136,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({'error': msg}, status)
 
     def read_json_body(self) -> dict | None:
-        length = int(self.headers.get('Content-Length', 0))
-        if not length:
-            return None
         try:
+            length = int(self.headers.get('Content-Length', 0))
+            if length <= 0:
+                return None
             return json.loads(self.rfile.read(length))
-        except (json.JSONDecodeError, ValueError):
+        except ValueError:  # includes JSONDecodeError
             return None
 
     def do_GET(self) -> None:
@@ -138,8 +166,13 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict) or 'path' not in body:
             self.err_json('missing path')
             return
+        if NO_DELETE and p in PERMANENT_DELETE_ROUTES:
+            self.err_json('deletion is disabled', 403)
+            return
         if p == '/api/favorite':
             self._api_move(body['path'], 'fav')
+        elif p == '/api/unfavorite':
+            self._api_unfavorite(body['path'])
         elif p == '/api/delete':
             self._api_move(body['path'], 'trash')
         elif p == '/api/empty-trash':
@@ -157,10 +190,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _serve_html(self) -> None:
         try:
-            body = (STATIC_DIR / 'gallery.html').read_bytes()
+            text = (STATIC_DIR / 'gallery.html').read_text(encoding='utf-8')
         except OSError:
             self.send_error(500, 'gallery.html not found')
             return
+        body = re.sub(r'<title>.*?</title>',
+                      lambda _: f'<title>{html.escape(TITLE)}</title>',
+                      text, count=1).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
@@ -330,37 +366,51 @@ class Handler(BaseHTTPRequestHandler):
             key=natural_key,
         )
         fav_dirs = [
-            d for d in dirs if (
-                abs_path /
-                d /
-                'fav').is_dir() and not (
-                abs_path /
-                d /
-                'fav').is_symlink()]
+            d for d in dirs
+            if (abs_path / d / 'fav').is_dir()
+            and not (abs_path / d / 'fav').is_symlink()
+        ]
         self.send_json({
             'dirs': dirs,
             'fav_dirs': fav_dirs,
             'media': [{'name': n, 'type': media_type(n)} for n in media],
             'has_trash': 'trash' in dirs,
             'has_fav': 'fav' in dirs,
+            'can_fav': not fav_blocked(rel),
+            'can_delete': not NO_DELETE,
         })
 
-    def _api_move(self, rel: str, dest_name: str) -> None:
+    def _resolve_media(self, rel: str) -> Path | None:
+        """Resolve a client media file path, sending an error if invalid."""
         if not validate_rel_path(rel):
             self.err_json('invalid path', 400)
-            return
+            return None
 
         abs_src = resolve_safe(rel)
         if abs_src is None or abs_src.is_symlink() or not abs_src.is_file():
             self.err_json('file not found', 404)
-            return
+            return None
 
         if abs_src.suffix.lower() not in ALL_MEDIA_EXTS:
             self.err_json('not a supported media file', 400)
+            return None
+
+        return abs_src
+
+    def _api_move(self, rel: str, dest_name: str) -> None:
+        abs_src = self._resolve_media(rel)
+        if abs_src is None:
+            return
+
+        if dest_name == 'fav' and fav_blocked(rel):
+            self.err_json('favorites are disabled here', 403)
             return
 
         parent = abs_src.parent
-        if dest_name == 'fav' and parent.name == 'trash':
+        if parent.name == dest_name and parent != ROOT:
+            self.err_json(f'already in {dest_name}', 400)
+            return
+        if dest_name == 'fav' and parent.name == 'trash' and parent != ROOT:
             parent = parent.parent
 
         dest_dir = safe_dest_dir(parent, dest_name)
@@ -369,6 +419,25 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         dest = unique_dest(dest_dir, abs_src.name)
+        try:
+            shutil.move(str(abs_src), str(dest))
+        except OSError as e:
+            self.err_json(str(e), 500)
+            return
+
+        self.send_json({'ok': True, 'dest': str(dest.relative_to(ROOT))})
+
+    def _api_unfavorite(self, rel: str) -> None:
+        abs_src = self._resolve_media(rel)
+        if abs_src is None:
+            return
+
+        fav_dir = abs_src.parent
+        if fav_dir.name != 'fav' or fav_dir == ROOT:
+            self.err_json('file is not in a fav directory', 400)
+            return
+
+        dest = unique_dest(fav_dir.parent, abs_src.name)
         try:
             shutil.move(str(abs_src), str(dest))
         except OSError as e:
@@ -389,6 +458,14 @@ class Handler(BaseHTTPRequestHandler):
 
         if abs_dir == ROOT:
             self.err_json('cannot favdir root', 400)
+            return
+
+        if fav_blocked(rel):
+            self.err_json('favorites are disabled here', 403)
+            return
+
+        if abs_dir.name in ('fav', 'trash') or abs_dir.parent.name == 'fav':
+            self.err_json('cannot favorite this directory', 400)
             return
 
         parent = abs_dir.parent
@@ -436,6 +513,13 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
+        # Remove the trash dir itself once empty (skipped symlinks or failed
+        # deletions leave it in place)
+        try:
+            trash_dir.rmdir()
+        except OSError:
+            pass
+
         self.send_json({'ok': True, 'deleted': deleted})
 
     def _api_empty_nonfavs(self, rel: str) -> None:
@@ -477,8 +561,6 @@ class Handler(BaseHTTPRequestHandler):
             self.err_json('directory not found', 404)
             return
 
-        # Refuse to delete root or a dir that has trash/fav (use other
-        # endpoints instead)
         if abs_dir == ROOT:
             self.err_json('cannot delete root', 400)
             return
@@ -534,6 +616,10 @@ def main() -> None:
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f'Serving {ROOT}')
+    if NO_FAV_PREFIXES:
+        print(f'No-fav: {", ".join(NO_FAV_PREFIXES)}')
+    if NO_DELETE:
+        print('Permanent deletion disabled')
     print(f'Open:   http://{args.host}:{args.port}')
     print('Press Ctrl-C to stop.')
     try:
