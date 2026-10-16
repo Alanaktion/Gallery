@@ -42,36 +42,108 @@ document.getElementById('btn-list-view').addEventListener('click', () => {
 
 // ── Fit-mode toggle ──────────────────────────────────────────
 
-function applyFitMode() {
-  const img = document.getElementById('fs-img');
-  const vid = document.getElementById('fs-vid');
-  const fsEl = document.getElementById('fullscreen');
+// 'contain' scales images up to fill the viewport; 'scale-down' only shrinks them
+if (fitMode !== 'contain') fitMode = 'scale-down';
 
-  if (fitMode === 'fit-width') {
-    img.style.objectFit = 'none';
-    img.style.width = '100vw';
-    img.style.height = 'auto';
-    vid.style.objectFit = 'cover';
-    fsEl.classList.add('fit-width');
-  } else {
-    img.style.objectFit = fitMode;
-    img.style.width = '';
-    img.style.height = '';
-    vid.style.objectFit = fitMode;
-    fsEl.classList.remove('fit-width');
-  }
-  document.getElementById('btn-fit').classList.toggle('active', fitMode !== 'scale-down');
+function applyFitMode() {
+  document.getElementById('fs-img').style.objectFit = fitMode;
+  document.getElementById('fs-vid').style.objectFit = fitMode;
+  document.getElementById('btn-fit').classList.toggle('active', fitMode === 'contain');
+  clearTimeout(zoomTimer);
+  setZoom(false);
 }
 
 function toggleFitMode() {
-  if (fitMode === 'scale-down') fitMode = 'contain';
-  else if (fitMode === 'contain') fitMode = 'fit-width';
-  else fitMode = 'scale-down';
+  fitMode = fitMode === 'scale-down' ? 'contain' : 'scale-down';
   localStorage.setItem('galleryFit', fitMode);
   applyFitMode();
 }
 
 document.getElementById('btn-fit').addEventListener('click', toggleFitMode);
+
+// ── Click-to-zoom (actual size) with panning ────────────────
+
+const fsStage = document.getElementById('fs-stage');
+const fsImg = document.getElementById('fs-img');
+let zoomed = false;
+let zoomTimer = null;
+let drag = null;  // {x, y, left, top, moved} while a mouse drag-pan is in progress
+
+// Scale the image is currently rendered at when not zoomed
+function fitScale() {
+  const nw = fsImg.naturalWidth, nh = fsImg.naturalHeight;
+  if (!nw || !nh) return 1;
+  const fit = Math.min(fsStage.clientWidth / nw, fsStage.clientHeight / nh);
+  return fitMode === 'scale-down' ? Math.min(1, fit) : fit;
+}
+
+function updateZoomable() {
+  fsImg.classList.toggle('zoomable', !zoomed && Math.abs(fitScale() - 1) > 0.001);
+}
+
+// Toggle actual size, keeping the clicked point under the cursor when zooming in
+function setZoom(on, clientX, clientY) {
+  if (on && !fsImg.classList.contains('zoomable')) return;
+  if (on === zoomed) { updateZoomable(); return; }
+
+  let fx = 0, fy = 0, ox = 0, oy = 0;
+  if (on && clientX != null) {
+    const rect = fsStage.getBoundingClientRect();
+    const s = fitScale();
+    ox = clientX - rect.left;
+    oy = clientY - rect.top;
+    // Position of the click in image pixels, accounting for object-fit centering
+    fx = (ox - (rect.width - fsImg.naturalWidth * s) / 2) / s;
+    fy = (oy - (rect.height - fsImg.naturalHeight * s) / 2) / s;
+    fx = Math.max(0, Math.min(fsImg.naturalWidth, fx));
+    fy = Math.max(0, Math.min(fsImg.naturalHeight, fy));
+  }
+
+  zoomed = on;
+  fsStage.classList.toggle('zoomed', on);
+  fsStage.classList.remove('dragging');
+  drag = null;
+  if (on) {
+    fsStage.scrollLeft = fsImg.offsetLeft + fx - ox;
+    fsStage.scrollTop = fsImg.offsetTop + fy - oy;
+  } else {
+    fsStage.scrollLeft = fsStage.scrollTop = 0;
+  }
+  updateZoomable();
+}
+
+fsImg.addEventListener('load', updateZoomable);
+window.addEventListener('resize', updateZoomable);
+
+fsImg.addEventListener('click', e => {
+  if (e.button !== 0) return;
+  if (drag && drag.moved) { drag = null; return; }
+  drag = null;
+  // Delay so a double-click (browser fullscreen) doesn't also toggle zoom
+  clearTimeout(zoomTimer);
+  if (e.detail > 1) return;
+  const { clientX, clientY } = e;
+  zoomTimer = setTimeout(() => setZoom(!zoomed, clientX, clientY), 250);
+});
+
+fsImg.addEventListener('pointerdown', e => {
+  if (!zoomed || e.button !== 0 || e.pointerType !== 'mouse') return;
+  drag = { x: e.clientX, y: e.clientY, left: fsStage.scrollLeft, top: fsStage.scrollTop, moved: false };
+  fsImg.setPointerCapture(e.pointerId);
+});
+
+fsImg.addEventListener('pointermove', e => {
+  if (!drag || !fsImg.hasPointerCapture(e.pointerId)) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  drag.moved = true;
+  fsStage.classList.add('dragging');
+  fsStage.scrollLeft = drag.left - dx;
+  fsStage.scrollTop = drag.top - dy;
+});
+
+fsImg.addEventListener('pointerup', () => fsStage.classList.remove('dragging'));
+fsImg.addEventListener('pointercancel', () => { fsStage.classList.remove('dragging'); drag = null; });
 
 applyFitMode();
 
@@ -370,7 +442,7 @@ function closeFSUI() {
   document.getElementById('fs-img').style.display = 'none';
   document.getElementById('fs-img').src = '';
   document.getElementById('fullscreen').style.display = 'none';
-  document.getElementById('fullscreen').classList.remove('fit-width');
+  setZoom(false);
   document.getElementById('browse').style.display = 'block';
 }
 
@@ -521,7 +593,9 @@ document.addEventListener('keydown', e => {
     } else if (e.key === 'ArrowRight' && mediaIdx < dirMedia.length - 1) {
       mediaIdx++; updateFSMedia(); handled = true;
     } else if (e.key === 'Escape') {
-      closeFS(); handled = true;
+      if (zoomed) setZoom(false);
+      else closeFS();
+      handled = true;
     } else if (e.key === 'f' || e.key === 'F') {
       document.getElementById('btn-fav').click(); handled = true;
     } else if (e.key === 'Delete' || e.key === 'd' || e.key === 'D') {

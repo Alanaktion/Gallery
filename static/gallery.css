@@ -166,16 +166,32 @@ body {
   z-index: 100;
   user-select: none;
 }
-#fullscreen.fit-width {
-  overflow-y: auto;
+
+/* Scroll container so zoomed images pan without moving the controls */
+#fs-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
 }
+#fs-stage.zoomed { overflow: auto; }
 
 #fs-img, #fs-vid {
   width: 100%;
-  height: 100vh;
+  height: 100%;
+  flex: none;
   object-fit: scale-down;
   display: block;
 }
+#fs-img.zoomable { cursor: zoom-in; }
+/* Actual size; margin:auto centers without clipping the scrollable overflow */
+#fs-stage.zoomed #fs-img {
+  width: auto;
+  height: auto;
+  margin: auto;
+  cursor: zoom-out;
+}
+#fs-stage.zoomed.dragging #fs-img { cursor: grabbing; }
 #fs-vid { background: #000; }
 
 .nav-btn {
