@@ -567,7 +567,9 @@ fsEl.addEventListener('touchstart', showControls, { passive: true });
 
 // ── Keyboard shortcuts ────────────────────────────────────────
 
-document.addEventListener('keydown', e => {
+// Capture phase on window so these run before a focused <video>'s built-in
+// controls, which would otherwise consume keys like arrows and space
+window.addEventListener('keydown', e => {
   // Leave browser shortcuts (Ctrl+F, Ctrl+D, Alt+←, …) alone
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
@@ -582,51 +584,64 @@ document.addEventListener('keydown', e => {
 
   const vid = document.getElementById('fs-vid');
   const isVideo = vid.style.display === 'block';
-  let handled = false;
-  let isVideoShortcut = false;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  let handled = true;
 
-  // Video-specific shortcuts (active whenever a video is open)
-  if (isVideo) {
-    if (e.key === ' ' || e.key === 'p' || e.key === 'P') {
-      vid.paused ? vid.play() : vid.pause();
-      handled = true; isVideoShortcut = true;
-    } else if (e.key === 'j' || e.key === 'J') {
-      vid.currentTime = Math.max(0, vid.currentTime - 10);
-      handled = true; isVideoShortcut = true;
-    } else if (e.key === 'k' || e.key === 'K') {
-      vid.currentTime = Math.min(vid.duration || Infinity, vid.currentTime + 10);
-      handled = true; isVideoShortcut = true;
-    } else if (e.key === 'l' || e.key === 'L') {
-      vid.loop = !vid.loop;
-      showToast(vid.loop ? '🔁 Loop on' : '🔁 Loop off');
-      handled = true; isVideoShortcut = true;
-    }
+  // Video-specific shortcuts (active whenever a video is open). Space is
+  // always consumed so it can't activate a focused button (e.g. close).
+  if (key === ' ' || (isVideo && key === 'p')) {
+    if (isVideo) vid.paused ? vid.play() : vid.pause();
+  } else if (isVideo && (key === 'j' || (e.shiftKey && key === 'ArrowLeft'))) {
+    vid.currentTime = Math.max(0, vid.currentTime - (key === 'j' ? 10 : 5));
+  } else if (isVideo && (key === 'k' || (e.shiftKey && key === 'ArrowRight'))) {
+    vid.currentTime = Math.min(vid.duration || Infinity, vid.currentTime + (key === 'k' ? 10 : 5));
+  } else if (isVideo && key === 'l') {
+    vid.loop = !vid.loop;
+    showToast(vid.loop ? '🔁 Loop on' : '🔁 Loop off');
+  } else if (isVideo && key === 'm') {
+    vid.muted = !vid.muted;
+    showToast(vid.muted ? '🔇 Muted' : '🔊 Unmuted');
+  } else if (isVideo && (key === 'ArrowUp' || key === 'ArrowDown')) {
+    const step = key === 'ArrowUp' ? 0.1 : -0.1;
+    vid.volume = Math.round(Math.min(1, Math.max(0, vid.volume + step)) * 10) / 10;
+    vid.muted = false;
+    showToast('🔊 ' + Math.round(vid.volume * 100) + '%');
   }
-
-  // Global fullscreen shortcuts
-  if (!handled) {
-    if (e.key === 'ArrowLeft' && mediaIdx > 0) {
-      mediaIdx--; updateFSMedia(); handled = true;
-    } else if (e.key === 'ArrowRight' && mediaIdx < dirMedia.length - 1) {
-      mediaIdx++; updateFSMedia(); handled = true;
-    } else if (e.key === 'Escape') {
-      if (zoomed) setZoom(false);
-      else closeFS();
-      handled = true;
-    } else if ((e.key === 'f' || e.key === 'F') && document.getElementById('btn-fav').style.display !== 'none') {
-      document.getElementById('btn-fav').click(); handled = true;
-    } else if ((e.key === 'Delete' || e.key === 'd' || e.key === 'D') && document.getElementById('btn-del').style.display !== 'none') {
-      document.getElementById('btn-del').click(); handled = true;
-    } else if (e.key === 'z' || e.key === 'Z') {
-      toggleFitMode(); handled = true;
-    }
+  // Global fullscreen shortcuts. Keys are consumed even when they're a no-op
+  // (first/last item, hidden button) so the video player doesn't act on them.
+  else if (key === 'ArrowLeft') {
+    if (mediaIdx > 0) { mediaIdx--; updateFSMedia(); }
+  } else if (key === 'ArrowRight') {
+    if (mediaIdx < dirMedia.length - 1) { mediaIdx++; updateFSMedia(); }
+  } else if (key === 'Escape') {
+    if (zoomed) setZoom(false);
+    else closeFS();
+  } else if (key === 'f') {
+    const btn = document.getElementById('btn-fav');
+    if (btn.style.display !== 'none') btn.click();
+  } else if (key === 'Delete' || key === 'd') {
+    const btn = document.getElementById('btn-del');
+    if (btn.style.display !== 'none') btn.click();
+  } else if (key === 'z') {
+    toggleFitMode();
+  } else {
+    handled = false;
   }
 
   if (handled) {
     e.preventDefault();
+    e.stopPropagation();
     hideControls();
   }
-});
+}, true);
+
+// Buttons activate on Space keyup, so cancel that too while the viewer is open
+window.addEventListener('keyup', e => {
+  if (e.key === ' ' && fsEl.style.display === 'block') {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
 
 let actionPending = false;  // prevents acting on the same item twice before it's removed
 
@@ -762,6 +777,8 @@ document.getElementById('btn-delete-dir').addEventListener('click', async () => 
 });
 
 function showToast(msg) {
+  // Replace any visible toast so rapid repeats (e.g. volume) don't stack
+  document.querySelectorAll('.toast').forEach(t => t.remove());
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = msg;
